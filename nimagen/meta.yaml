@@ -1,0 +1,40 @@
+{% set name = "nimagen" %}
+{% set version = "0.0.1" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/nimagen-{{ version }}.tar.gz
+  sha256: 27924f33a08e0c2942a34b81e0ca1aea3d8333dfda740a0e56a7e4683ebcb543
+
+build:
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv
+  number: 0
+
+requirements:
+  host:
+    - python >=3.0
+    - pip
+  run:
+    - python >=3.0
+
+test:
+  imports:
+    - nimagen
+  commands:
+    - pip check
+  requires:
+    - pip
+
+about:
+  home: https://pypi.org/project/nimagen/
+  summary: Simple statistical and visualisation tool for neuroimaging genetics studies
+  license: MIT
+  license_file: LICENSE
+
+extra:
+  recipe-maintainers:
+    - lehai-ml
