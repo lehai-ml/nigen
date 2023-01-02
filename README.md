@@ -1,6 +1,4 @@
-<img src="misc/Nigen_logo_banner.png" alt="drawing" width="300"/>
-
-# Statistical and Visualisation tool for NeuroImaging GENetics studies
+# NIMAGEN: Statistical and Visualisation tool for NeuroIMAging GENetics studies
 
 See the online documentation
 
