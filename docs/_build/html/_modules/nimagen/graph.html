@@ -1,0 +1,597 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nimagen.graph &#8212; NIMAGEN 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css" />
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for nimagen.graph</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">graph.py</span>
+<span class="sd">Used to perform graph analysis and network based threshold statistics</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">scipy.linalg</span> <span class="kn">import</span> <span class="n">lstsq</span> <span class="k">as</span> <span class="n">scipy_lstsq</span>
+<span class="kn">import</span> <span class="nn">tqdm</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span><span class="n">Union</span><span class="p">,</span><span class="n">Optional</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+
+<div class="viewcode-block" id="Graph_analysis"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis">[docs]</a><span class="k">class</span> <span class="nc">Graph_analysis</span><span class="p">:</span>
+    
+<div class="viewcode-block" id="Graph_analysis.get_edge_size"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.get_edge_size">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_edge_size</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">comps</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">comp_sizes</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate for each connected component the edge size.</span>
+<span class="sd">        The unconnected nodes are coded as an independent number with comp_sizes of 1.</span>
+<span class="sd">        First we need to remove these unconnected nodes and retain only connected components.</span>
+<span class="sd">        Then for each connected component, we find the nodes in that connected component.</span>
+<span class="sd">        From there, we can look at the lower half of the binarised matrix, and count number of 1s in the matrix containing only those nodes.</span>
+<span class="sd">        </span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : np.ndarray</span>
+<span class="sd">            the binarised squared symmetric matrix.</span>
+<span class="sd">        comps : np.ndarray</span>
+<span class="sd">            list of the size of number of nodes, where each location is the component the node belong to.</span>
+<span class="sd">            e.g. [1,1,2,2] means the first two nodes belong to component 1, and the last 2 in component 2</span>
+<span class="sd">        comp_sizes : np.ndarray</span>
+<span class="sd">            Size of each component in terms of number of nodes.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        ind_sz : np.ndarray</span>
+<span class="sd">            This tells me which components id is connected [1,2] means component id 1, and 2 are connected.</span>
+<span class="sd">        sz_links : np.ndarray</span>
+<span class="sd">            This tells me for each component in ind_sz, how many edges there is.</span>
+<span class="sd">        max_edge_size : float</span>
+<span class="sd">            The max of sz_links. If sz_links = 0, then max_edge_size = 0.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">#calculate the largest connected component size in terms of edges</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="c1">#this is needed because when I sum the square symmetric mesh, I don&#39;t want to count the diagonals.</span>
+        <span class="n">ind_sz</span><span class="p">,</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">comp_sizes</span><span class="o">&gt;</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># see and removes the unconnected nodes</span>
+        <span class="n">ind_sz</span> <span class="o">+=</span><span class="mi">1</span> <span class="c1"># by seeing which connected comps values correspond to ind_sz</span>
+        <span class="n">nr_components</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">ind_sz</span><span class="p">)</span> <span class="c1"># number of components</span>
+        <span class="n">sz_links</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nr_components</span><span class="p">,))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nr_components</span><span class="p">):</span>
+            <span class="n">nodes</span><span class="p">,</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">ind_sz</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="n">comps</span><span class="p">)</span>
+            <span class="n">sz_links</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ix_</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span><span class="n">nodes</span><span class="p">)])</span><span class="o">/</span><span class="mi">2</span> <span class="c1">#get the number of edges for each connected components</span>
+        
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">sz_links</span><span class="p">):</span>
+            <span class="n">max_edge_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">sz_links</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">max_edge_size</span> <span class="o">=</span> <span class="mi">0</span>
+            
+        <span class="k">return</span> <span class="n">ind_sz</span><span class="p">,</span> <span class="n">sz_links</span><span class="p">,</span> <span class="n">max_edge_size</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.get_components"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.get_components">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_components</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the components of an undirected graph specified by the binary and</span>
+<span class="sd">        undirected adjacency matrix adj. Components and their constitutent nodes</span>
+<span class="sd">        are assigned the same index and stored in the vector, comps. The vector,</span>
+<span class="sd">        comp_sizes, contains the number of nodes beloning to each component.</span>
+<span class="sd">        Note:</span>
+<span class="sd">            Taken directly from bct.clustering.get_components</span>
+<span class="sd">            Cite accordingly</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : np.ndarray</span>
+<span class="sd">            binarised matrix, the diagonal may not be 1.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If X is not undirected.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        comps : np.ndarray</span>
+<span class="sd">            list of the size of number of nodes, where each location is the component the node belong to.</span>
+<span class="sd">            e.g. [1,1,2,2] means the first two nodes belong to component 1, and the last 2 in component 2</span>
+<span class="sd">        comp_sizes : np.ndarray</span>
+<span class="sd">            Size of each component in terms of number of nodes.</span>
+<span class="sd">        max_edge_size: float</span>
+<span class="sd">            </span>
+<span class="sd">        Note:</span>
+<span class="sd">            Unconnected nodes will have their own index component and component size of 1</span>
+<span class="sd">            How do you calculate the size of a connected component?</span>
+<span class="sd">            You obviously want to count the edges.</span>
+<span class="sd">            But because unconnected nodes will have the size node of 1, you need to remove them</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">X</span> <span class="o">==</span> <span class="n">X</span><span class="o">.</span><span class="n">T</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;get_components requires an undirected matrix&#39;</span><span class="p">)</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">edge_map</span> <span class="o">=</span> <span class="p">[{</span><span class="n">u</span><span class="p">,</span><span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">if</span> <span class="n">X</span><span class="p">[</span><span class="n">u</span><span class="p">,</span> <span class="n">v</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="c1"># get the edges, where u is the row and v is the column indices</span>
+        <span class="n">union_sets</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">edge_map</span><span class="p">:</span>
+            <span class="c1"># check for each edge in the edge map,</span>
+            <span class="c1"># if the first edge has common node with the second edge, append them together.</span>
+            <span class="c1"># else, add them as separate component</span>
+            <span class="n">temp</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">union_sets</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span><span class="o">.</span><span class="n">isdisjoint</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+                    <span class="n">item</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">temp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+            <span class="n">temp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+            <span class="n">union_sets</span> <span class="o">=</span> <span class="n">temp</span>
+        <span class="n">comps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">union_sets</span><span class="p">))</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">union_sets</span><span class="p">[</span><span class="n">i</span><span class="p">]])</span><span class="c1"># assign each component with a number</span>
+        <span class="n">comp_sizes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">union_sets</span><span class="p">])</span> <span class="c1"># get the component size</span>
+        <span class="c1">#calculate the largest connected component size in terms of edges</span>
+        <span class="n">_</span><span class="p">,</span><span class="n">_</span><span class="p">,</span> <span class="n">max_edge_size</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_edge_size</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">comps</span><span class="p">,</span> <span class="n">comp_sizes</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">comps</span><span class="p">,</span> <span class="n">comp_sizes</span><span class="p">,</span> <span class="n">max_edge_size</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.get_degree_und"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.get_degree_und">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_degree_und</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="c1">#X is binarised matrix</span>
+        <span class="n">node_degree</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">node_degree</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.lower_triangle"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.lower_triangle">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">lower_triangle</span><span class="p">(</span><span class="n">matrix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Works in Diffusion dataset. Organizes a square unidirectional matrix into 1D vector. Because the matrix </span>
+<span class="sd">            is unidirectional, only the lower triangle is needed.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            matrix(np.array): the square matrix</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            new_array(np.array): 1D vector of the lower half.</span>
+<span class="sd">        Example:     </span>
+<span class="sd">        0 1 2 3</span>
+<span class="sd">        1 0 3 4</span>
+<span class="sd">        2 3 0 5====&gt;[1,2,3,3,4,5]</span>
+<span class="sd">        3 4 5 0</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">r</span><span class="p">[:,</span><span class="kc">None</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">r</span>
+        <span class="k">return</span> <span class="n">matrix</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.reverse_lower_triangle"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.reverse_lower_triangle">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">reverse_lower_triangle</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Organise a 1D matrix to a square 2D undirected matrix.</span>
+<span class="sd">        Args:</span>
+<span class="sd">            matrix: 1D matrix</span>
+<span class="sd">            side_of_the_square (int): desired square size </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            matrix: 2D matrix</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">side_of_the_square</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">side_of_the_square</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">roots</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="o">-</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">matrix</span><span class="p">)</span><span class="o">*</span><span class="mi">2</span><span class="p">)])[</span><span class="mi">0</span><span class="p">])</span>
+            
+        <span class="k">def</span> <span class="nf">fill_in_matrix</span><span class="p">(</span><span class="n">return_matrix</span><span class="p">,</span><span class="n">matrix</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">):</span>
+            <span class="n">counter</span><span class="o">=</span><span class="mi">0</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+                    <span class="n">return_matrix</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="n">return_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">n</span><span class="p">]</span><span class="o">=</span><span class="n">matrix</span><span class="p">[</span><span class="n">counter</span><span class="p">]</span>
+                    <span class="n">counter</span><span class="o">+=</span><span class="mi">1</span>
+            <span class="k">return</span> <span class="n">return_matrix</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">return_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">side_of_the_square</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">fill_in_matrix</span><span class="p">(</span><span class="n">return_matrix</span><span class="p">,</span><span class="n">matrix</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+            <span class="n">return_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">side_of_the_square</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;object&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">fill_in_matrix</span><span class="p">(</span><span class="n">return_matrix</span><span class="p">,</span><span class="n">matrix</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.combine_nodes_together"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.combine_nodes_together">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">combine_nodes_together</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+                               <span class="o">*</span><span class="n">idx_args</span><span class="p">,</span>
+                               <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Group the nodes together by summing their values in matrix (or mean, max)</span>
+<span class="sd">        Return the new matrix or new names of the updated list</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : np.ndarray</span>
+<span class="sd">            Matrix undirected of size (nodes,nodes).</span>
+<span class="sd">        *idx_args : List or arrays</span>
+<span class="sd">            Series of list or arrays, where each list is a group of nodes separated by comma.</span>
+<span class="sd">        **operation_kwargs : TYPE</span>
+<span class="sd">            operation: {&#39;sum&#39;,&#39;mean&#39;,&#39;max&#39;}</span>
+<span class="sd">            grouped_node_list List or dict: </span>
+<span class="sd">                if dict: key = name of the group, value = indices in the group, idx_args is not required</span>
+<span class="sd">                if list: this is list of name that correspond to each group. Must match the number of list in idx_args</span>
+<span class="sd">            </span>
+<span class="sd">            original_node_list: Original list of name for each node</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If X is not undirected.</span>
+<span class="sd">            If number of grouped idx is less than 2</span>
+<span class="sd">        KeyError</span>
+<span class="sd">            If providing grouped node list without original node list</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        X_new: np.ndarray</span>
+<span class="sd">            Updated grouped X</span>
+<span class="sd">        Grouped node list: np.ndarray</span>
+<span class="sd">            Grouped node list, the position of each value correspond to each node.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">X</span> <span class="o">==</span> <span class="n">X</span><span class="o">.</span><span class="n">T</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;combine_regions requires undirected matrix&#39;</span><span class="p">)</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;operation&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">operation_kwargs</span><span class="p">:</span> <span class="c1"># define what you want to do with groupings</span>
+            <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;operation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;sum&#39;</span>
+            
+        <span class="k">if</span> <span class="s1">&#39;grouped_node_list&#39;</span> <span class="ow">in</span> <span class="n">operation_kwargs</span><span class="p">:</span> <span class="c1"># node list correspond to the grouped idx_args:</span>
+            <span class="k">if</span> <span class="s1">&#39;original_node_list&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">operation_kwargs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;original_node_list is required to provide updated list&#39;</span><span class="p">)</span>
+            <span class="n">original_list</span> <span class="o">=</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;original_node_list&#39;</span><span class="p">]</span>    
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;grouped_node_list&#39;</span><span class="p">],</span><span class="nb">dict</span><span class="p">):</span>
+                <span class="n">grouped_idx_name</span> <span class="o">=</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;grouped_node_list&#39;</span><span class="p">]</span>
+                <span class="n">idx_args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">grouped_idx_name</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+                <span class="n">grouped_idx_name</span> <span class="o">=</span> <span class="p">{</span><span class="n">idx</span><span class="p">:</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span><span class="n">indices</span> <span class="ow">in</span> <span class="n">grouped_idx_name</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">}</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;grouped_node_list&#39;</span><span class="p">],</span><span class="nb">list</span><span class="p">):</span>
+                <span class="c1">#change the name in the original list to match with grouped node list and then drop duplicates keep first</span>
+                <span class="n">grouped_idx_name</span> <span class="o">=</span> <span class="p">{</span><span class="n">idx</span><span class="p">:</span><span class="n">grouped_name</span> <span class="k">for</span> <span class="n">idx_list</span><span class="p">,</span><span class="n">grouped_name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">idx_args</span><span class="p">,</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;grouped_node_list&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">idx_list</span> <span class="p">}</span>
+            <span class="n">updated_node_list</span> <span class="o">=</span> <span class="p">[(</span><span class="n">idx</span><span class="p">,</span><span class="n">grouped_idx_name</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span> <span class="k">if</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">grouped_idx_name</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">else</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span><span class="n">original_name</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span><span class="n">original_name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span><span class="n">original_list</span><span class="p">)]</span>
+            <span class="n">updated_node_list</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">updated_node_list</span><span class="p">))</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">keep</span><span class="o">=</span><span class="s1">&#39;first&#39;</span><span class="p">)</span>
+            <span class="n">updated_node_list</span> <span class="o">=</span> <span class="n">updated_node_list</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+        
+        <span class="k">for</span> <span class="n">idx_list</span> <span class="ow">in</span> <span class="n">idx_args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">idx_list</span><span class="p">)</span><span class="o">&lt;</span><span class="mi">2</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">rows_to_group</span> <span class="o">=</span> <span class="n">new_X</span><span class="p">[</span><span class="n">idx_list</span><span class="p">,:]</span> <span class="c1"># pick out the rows you want to group</span>
+            <span class="k">if</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;operation&#39;</span><span class="p">]</span> <span class="o">==</span><span class="s1">&#39;sum&#39;</span><span class="p">:</span>
+                <span class="n">new_row</span> <span class="o">=</span> <span class="n">rows_to_group</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;operation&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;mean&#39;</span><span class="p">:</span>
+                <span class="n">new_row</span> <span class="o">=</span> <span class="n">rows_to_group</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">operation_kwargs</span><span class="p">[</span><span class="s1">&#39;operation&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;max&#39;</span><span class="p">:</span>
+                <span class="n">new_row</span> <span class="o">=</span> <span class="n">rows_to_group</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">new_X</span><span class="p">[</span><span class="n">idx_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],:]</span> <span class="o">=</span> <span class="n">new_row</span> <span class="c1"># write out the group result to the last index row</span>
+            <span class="n">new_X</span><span class="p">[:,</span><span class="n">idx_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">new_row</span> <span class="c1"># and the last index column</span>
+            <span class="n">new_X</span><span class="p">[</span><span class="n">idx_list</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],:]</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1"># set all other columns and rows to 0</span>
+            <span class="n">new_X</span><span class="p">[:,</span><span class="n">idx_list</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">new_X</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">new_X</span><span class="p">[</span><span class="o">~</span><span class="p">(</span><span class="n">new_X</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)]</span> <span class="c1"># remove rows with 0s</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">new_X</span><span class="p">[:,</span><span class="o">~</span><span class="p">(</span><span class="n">new_X</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)]</span> <span class="c1"># remove columns with 0s</span>
+        
+        <span class="k">if</span> <span class="s1">&#39;grouped_node_list&#39;</span> <span class="ow">in</span> <span class="n">operation_kwargs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">new_X</span><span class="p">,</span><span class="n">updated_node_list</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">new_X</span></div>
+    
+<div class="viewcode-block" id="Graph_analysis.remove_nodes"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.Graph_analysis.remove_nodes">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">remove_nodes</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+                     <span class="n">nodes_to_remove</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+                     <span class="n">original_node_list</span><span class="p">:</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Removes the nodes from the matrix and return a new matrix and list of updated nodes name</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : np.ndarray</span>
+<span class="sd">            Matrix undirected of size (nodes,nodes)..</span>
+<span class="sd">        nodes_to_remove : np.ndarray</span>
+<span class="sd">            Index of nodes in the matrix that needs to be removed.</span>
+<span class="sd">        original_node_list : List[str], optional</span>
+<span class="sd">            Name of the nodes in the matrix. The default is None.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If X is not undirected.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        new_X: np.ndarray</span>
+<span class="sd">            new updated matrix.</span>
+<span class="sd">        updated_node_list : List</span>
+<span class="sd">            list of updated node names</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">X</span><span class="o">==</span><span class="n">X</span><span class="o">.</span><span class="n">T</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;requires undirected matrix&#39;</span><span class="p">)</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">new_X</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">new_X</span><span class="p">[</span><span class="n">nodes_to_remove</span><span class="p">,:]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">new_X</span><span class="p">[:,</span><span class="n">nodes_to_remove</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">new_X</span><span class="p">[</span><span class="o">~</span><span class="p">(</span><span class="n">new_X</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)]</span> <span class="c1"># remove rows with 0s</span>
+        <span class="n">new_X</span> <span class="o">=</span> <span class="n">new_X</span><span class="p">[:,</span><span class="o">~</span><span class="p">(</span><span class="n">new_X</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)]</span> <span class="c1"># remove columns with 0s</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">fill_diagonal</span><span class="p">(</span><span class="n">new_X</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">original_node_list</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">new_X</span>
+        <span class="n">updated_node_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span><span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">original_node_list</span><span class="p">)</span> <span class="k">if</span> <span class="n">idx</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">nodes_to_remove</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">new_X</span><span class="p">,</span> <span class="n">updated_node_list</span></div></div>
+    
+        
+            
+<div class="viewcode-block" id="NBS"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS">[docs]</a><span class="k">class</span> <span class="nc">NBS</span><span class="p">:</span>
+    
+<div class="viewcode-block" id="NBS.T_matrix"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.T_matrix">[docs]</a>    <span class="k">class</span> <span class="nc">T_matrix</span><span class="p">:</span>
+    
+<div class="viewcode-block" id="NBS.T_matrix.calculate_t_matrix"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.T_matrix.calculate_t_matrix">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">calculate_t_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">y</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Calculate t-value by performing mass linear regression.</span>
+<span class="sd">            Utilises scipy.linalg.lstsq lapack driver = &#39;gelsy&#39;</span>
+<span class="sd">            Each linear regression model has a bias term, but t-value of only the predictor is outputed.</span>
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            X : np.ndarray</span>
+<span class="sd">                Matrix of shape (n,K) where n is the number of observation and K is the number of connections.</span>
+<span class="sd">            y : np.ndarray</span>
+<span class="sd">                The target continuous variable, which will be shuffled in permutation testing.</span>
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            t_matrix : np.ndarray</span>
+<span class="sd">                Assuming the undirected graph, this is a (K,) vector where t_matrix[0] correspond to the t-value of the K[0] in linear regression model with a bias term.</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">const</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">t_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">dependentVar</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="n">X_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">const</span><span class="p">,</span><span class="n">X</span><span class="p">[:,</span><span class="n">dependentVar</span><span class="p">:</span><span class="n">dependentVar</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">beta</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scipy_lstsq</span><span class="p">(</span><span class="n">X_new</span><span class="p">,</span><span class="n">y</span><span class="p">,</span><span class="n">lapack_driver</span><span class="o">=</span><span class="s1">&#39;gelsy&#39;</span><span class="p">)</span>
+                <span class="n">y_pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">X_new</span><span class="p">,</span><span class="n">beta</span><span class="p">)</span>
+                <span class="n">MSE</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">y</span><span class="o">-</span><span class="n">y_pred</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span><span class="o">/</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span><span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+                <span class="n">var_b</span> <span class="o">=</span> <span class="n">MSE</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X_new</span><span class="o">.</span><span class="n">T</span><span class="p">,</span><span class="n">X_new</span><span class="p">))</span><span class="o">.</span><span class="n">diagonal</span><span class="p">())</span>
+                <span class="n">sd_b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var_b</span><span class="p">)</span>
+                <span class="n">ts_b</span> <span class="o">=</span> <span class="n">beta</span><span class="o">/</span><span class="n">sd_b</span>
+                <span class="n">t_matrix</span><span class="p">[</span><span class="n">dependentVar</span><span class="p">]</span> <span class="o">=</span> <span class="n">ts_b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">t_matrix</span></div>
+        
+<div class="viewcode-block" id="NBS.T_matrix.get_permutation"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.T_matrix.get_permutation">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">get_permutation</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">y</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">perm</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+            <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Parameters</span>
+<span class="sd">            ----------</span>
+<span class="sd">            X : np.ndarray</span>
+<span class="sd">                Matrix of shape (n,K) where n is the number of observation and K is the number of connections.</span>
+<span class="sd">            y : np.ndarray</span>
+<span class="sd">                The target continuous variable, which will be shuffled in permutation testing</span>
+<span class="sd">            perm : int, optional</span>
+<span class="sd">                number of permutation. The default is 1000. uses np.random.Generator.permutation (without replacement)</span>
+<span class="sd">    </span>
+<span class="sd">            Returns</span>
+<span class="sd">            -------</span>
+<span class="sd">            all_t_perm : np.ndarray</span>
+<span class="sd">                A t-value matrix of shape (perm,K) where perm is the number of permutation performed, and K is the number of connection examined.</span>
+<span class="sd">    </span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+            <span class="n">all_t_perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">perm</span><span class="p">,</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+            
+            <span class="k">for</span> <span class="n">perm_n</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="o">.</span><span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">perm</span><span class="p">)):</span>
+                <span class="n">y_perm</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+                <span class="n">t_matrix_perm</span> <span class="o">=</span> <span class="n">NBS</span><span class="o">.</span><span class="n">T_matrix</span><span class="o">.</span><span class="n">calculate_t_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y_perm</span><span class="p">)</span>
+                <span class="n">all_t_perm</span><span class="p">[</span><span class="n">perm_n</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">t_matrix_perm</span>
+                    
+            <span class="k">return</span> <span class="n">all_t_perm</span></div></div>
+    
+<div class="viewcode-block" id="NBS.Corr_matrix"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.Corr_matrix">[docs]</a>    <span class="k">class</span> <span class="nc">Corr_matrix</span><span class="p">:</span>
+<div class="viewcode-block" id="NBS.Corr_matrix.calculate_adj_corr_matrix"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.Corr_matrix.calculate_adj_corr_matrix">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">calculate_adj_corr_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">y</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">to_permute</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1">#calculate adjusted values for y and then perform x</span>
+            <span class="n">const</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">adjusted_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;y cannot be less than 1 to calculate correlation matrix&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">to_permute</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">to_permute</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">to_permute</span> <span class="o">=</span> <span class="n">to_permute</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">X</span><span class="p">,</span><span class="n">to_permute</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">X_new</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">const</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="n">beta</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">scipy_lstsq</span><span class="p">(</span><span class="n">X_new</span><span class="p">,</span><span class="n">y</span><span class="p">[:,</span><span class="n">value</span><span class="p">],</span><span class="n">lapack_driver</span><span class="o">=</span><span class="s1">&#39;gelsy&#39;</span><span class="p">)</span>
+                <span class="n">y_pred</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">X_new</span><span class="p">,</span><span class="n">beta</span><span class="p">)</span>
+                <span class="n">adjusted_y</span><span class="p">[:,</span><span class="n">value</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span><span class="p">[:,</span><span class="n">value</span><span class="p">]</span> <span class="o">-</span> <span class="n">y_pred</span>
+            <span class="n">corr_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">adjusted_y</span><span class="p">,</span><span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">corr_matrix</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">lower_triangle</span><span class="p">(</span><span class="n">corr_matrix</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">corr_matrix</span></div>
+        
+<div class="viewcode-block" id="NBS.Corr_matrix.get_permutation_corr_matrix"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.Corr_matrix.get_permutation_corr_matrix">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">get_permutation_corr_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">y</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span><span class="n">to_permute</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">perm</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+            <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+            <span class="n">all_corr_perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">perm</span><span class="p">,</span><span class="nb">int</span><span class="p">((</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">)))</span>
+            
+            <span class="k">for</span> <span class="n">perm_n</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="o">.</span><span class="n">tqdm</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">perm</span><span class="p">)):</span>
+                <span class="n">to_permute</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">to_permute</span><span class="p">)</span>
+                <span class="n">corr_perm</span> <span class="o">=</span> <span class="n">NBS</span><span class="o">.</span><span class="n">Corr_matrix</span><span class="o">.</span><span class="n">calculate_adj_corr_matrix</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span><span class="n">to_permute</span><span class="o">=</span><span class="n">to_permute</span><span class="p">)</span>
+                <span class="n">all_corr_perm</span><span class="p">[</span><span class="n">perm_n</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">corr_perm</span>
+                    
+            <span class="k">return</span> <span class="n">all_corr_perm</span></div></div>
+
+    
+<div class="viewcode-block" id="NBS.get_null_distribution"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.get_null_distribution">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_null_distribution</span><span class="p">(</span><span class="n">permutation_matrix</span><span class="p">:</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+                              <span class="n">threshold</span><span class="p">:</span><span class="nb">float</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                              <span class="n">number_of_nodes</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                              <span class="n">metrics</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span><span class="nb">str</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Applying a t-value threshold to the t-value matrix derived from permutation step.</span>
+<span class="sd">        And calculate the maximal size of the connected component.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        all_t_perm : np.ndarray</span>
+<span class="sd">            A t-value matrix of shape (perm,K) where perm is the number of permutation performed, and K is the number of connection examined..</span>
+<span class="sd">        threshold : float</span>
+<span class="sd">            The threshold to be applied to all_t_perm.</span>
+<span class="sd">        number_of_nodes : int, optional</span>
+<span class="sd">            Number of nodes examined.</span>
+<span class="sd">        metrics: dict</span>
+<span class="sd">            {&#39;max_edge_size&#39;,&#39;max_degree_centrality&#39;}</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        null_distribution : np.ndarray</span>
+<span class="sd">            Vector of shape (perm,), at each position is the maximal edge size for each permutation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">permutation_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">permutation_matrix</span><span class="p">)</span><span class="o">&gt;</span><span class="n">threshold</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="c1">#apply supra-threshold</span>
+        <span class="n">null_distribution</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span><span class="nb">list</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">metric</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
+                <span class="n">null_distribution</span><span class="p">[</span><span class="n">metric</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">permutation_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">permutation_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="n">temp_square</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">reverse_lower_triangle</span><span class="p">(</span><span class="n">permutation_matrix</span><span class="p">[</span><span class="n">row</span><span class="p">,:],</span><span class="n">side_of_the_square</span><span class="o">=</span><span class="n">number_of_nodes</span><span class="p">)</span>
+            <span class="k">if</span> <span class="s1">&#39;max_edge_size&#39;</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
+                <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">max_edge_size</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_components</span><span class="p">(</span><span class="n">temp_square</span><span class="p">)</span><span class="c1"># get the component and component size</span>
+                <span class="n">null_distribution</span><span class="p">[</span><span class="s1">&#39;max_edge_size&#39;</span><span class="p">][</span><span class="n">row</span><span class="p">]</span> <span class="o">=</span> <span class="n">max_edge_size</span>
+            <span class="k">if</span> <span class="s1">&#39;max_degree_centrality&#39;</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
+                <span class="n">null_distribution</span><span class="p">[</span><span class="s1">&#39;max_degree_centrality&#39;</span><span class="p">][</span><span class="n">row</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_degree_und</span><span class="p">(</span><span class="n">temp_square</span><span class="p">))</span> <span class="c1"># maximum degree centrality</span>
+                
+        <span class="k">return</span> <span class="n">null_distribution</span></div>
+            
+<div class="viewcode-block" id="NBS.get_p_val"><a class="viewcode-back" href="../../nimagen.html#nimagen.graph.NBS.get_p_val">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_p_val</span><span class="p">(</span><span class="n">observed_matrix</span><span class="p">,</span>
+                  <span class="n">threshold</span><span class="p">:</span><span class="nb">float</span><span class="p">,</span>
+                  <span class="n">null_distribution</span><span class="p">:</span><span class="nb">dict</span><span class="p">,</span>
+                  <span class="n">number_of_nodes</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get p value for each connected component in the observed data</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : np.ndarray</span>
+<span class="sd">            Matrix of shape (n,K) where n is the number of observation and K is the number of connections.</span>
+<span class="sd">        y : np.ndarray</span>
+<span class="sd">            The target continuous variable, which will be shuffled in permutation testing.</span>
+<span class="sd">        threshold : float</span>
+<span class="sd">            The t-value threshold to be applied to t-value matrix.</span>
+<span class="sd">        null_distribution : np.ndarray</span>
+<span class="sd">            Vector of shape (perm,), at each position is the maximal edge size for each permutation.</span>
+<span class="sd">        number_of_nodes : int, optional</span>
+<span class="sd">            Number of nodes examined. The default is 90.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        p_vals : np.ndarray</span>
+<span class="sd">            Matrix of shape (nr_connected_component,) corresponding to p-value at each connected component</span>
+<span class="sd">        comps : np.ndarray</span>
+<span class="sd">            list of the size of number of nodes, where each location is the component the node belong to.</span>
+<span class="sd">            e.g. [1,1,2,2] means the first two nodes belong to component 1, and the last 2 in component 2</span>
+<span class="sd">        ind_sz : np.ndarray</span>
+<span class="sd">            This tells me which components id is connected [1,2] means component id 1, and 2 are connected.</span>
+<span class="sd">        sz_links : np.ndarray</span>
+<span class="sd">            This tells me for each component in ind_sz, how many edges there is.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">observed_matrix</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;matrix must be a numpy array of shape (k,)&#39;</span><span class="p">)</span>
+        <span class="n">observed_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">observed_matrix</span><span class="p">)</span><span class="o">&gt;</span><span class="n">threshold</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="c1">#apply supra-threshold</span>
+        <span class="n">observed_square</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">reverse_lower_triangle</span><span class="p">(</span><span class="n">observed_matrix</span><span class="p">,</span><span class="n">side_of_the_square</span><span class="o">=</span><span class="n">number_of_nodes</span><span class="p">)</span>
+        <span class="n">observed_metrics</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">null_distribution</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;max_edge_size&#39;</span><span class="p">:</span>
+                <span class="n">comps</span><span class="p">,</span> <span class="n">comp_sizes</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_components</span><span class="p">(</span><span class="n">observed_square</span><span class="p">)</span>
+                <span class="c1">#calculate number of edges</span>
+                <span class="n">ind_sz</span><span class="p">,</span> <span class="n">sz_links</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_edge_size</span><span class="p">(</span><span class="n">observed_square</span><span class="p">,</span> <span class="n">comps</span><span class="p">,</span> <span class="n">comp_sizes</span><span class="p">)</span>
+                <span class="c1">#calculate p_vals</span>
+                <span class="n">p_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">ind_sz</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ind_sz</span><span class="p">)):</span>
+                    <span class="n">p_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">null_distribution</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">sz_links</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">null_distribution</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;p_vals&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_vals</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;comps&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">comps</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;ind_sz&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ind_sz</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;sz_links&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sz_links</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;max_degree_centrality&#39;</span><span class="p">:</span>
+                <span class="n">node_degree</span> <span class="o">=</span> <span class="n">Graph_analysis</span><span class="o">.</span><span class="n">get_degree_und</span><span class="p">(</span><span class="n">observed_square</span><span class="p">)</span>
+                <span class="n">p_vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">node_degree</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">node_degree</span><span class="p">)):</span>
+                    <span class="n">p_vals</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">null_distribution</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">node_degree</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">null_distribution</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;p_vals&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_vals</span>
+                <span class="n">observed_metrics</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;node_degree&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">node_degree</span>
+        
+        <span class="k">return</span> <span class="n">observed_metrics</span></div></div>
+
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">NIMAGEN</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, Hai Le.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

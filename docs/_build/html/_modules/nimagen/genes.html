@@ -1,0 +1,381 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nimagen.genes &#8212; NIMAGEN 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css" />
+    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for nimagen.genes</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;&quot;</span>
+<span class="sd">genes.py</span>
+<span class="sd">perform gene/gene-set analysis</span>
+
+<span class="sd">Following steps are available:</span>
+<span class="sd">    SNPsFunctionalAnalysis</span>
+<span class="sd">        extract_new_bed_file</span>
+<span class="sd">        do_mass_univariate_test - perform mass univariate test on each SNP</span>
+<span class="sd">        get_the_best_SNPs</span>
+<span class="sd">        SNPs_annotation_to_gene</span>
+<span class="sd">        </span>
+<span class="sd">    </span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">DefaultDict</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">bed_reader</span>
+<span class="kn">import</span> <span class="nn">statsmodels.api</span> <span class="k">as</span> <span class="nn">sm</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">import</span> <span class="nn">tqdm</span>
+
+<div class="viewcode-block" id="SNPsFunctionalAnalysis"><a class="viewcode-back" href="../../nimagen.html#nimagen.genes.SNPsFunctionalAnalysis">[docs]</a><span class="k">class</span> <span class="nc">SNPsFunctionalAnalysis</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Functional analysis pipeline    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">snps_list</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+                 <span class="n">bed_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Initialise the pipeline</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            snps_list (Union[List[str], pd.DataFrame]): List of SNPs or a dataframe with a column named SNPs</span>
+<span class="sd">            bed_file (Optional[Union[str, bed_reader.open_bed]], optional): The bed file containing the genetic information. Defaults to None.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">snps_list</span><span class="p">)</span> <span class="o">==</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">snps_list</span> <span class="o">=</span> <span class="n">snps_list</span><span class="o">.</span><span class="n">SNP</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">updated_snps_list</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">updated_bed_file</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">snps_list</span><span class="p">)</span> <span class="o">==</span> <span class="nb">list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">snps_list</span> <span class="o">=</span> <span class="n">snps_list</span>
+        <span class="k">if</span> <span class="n">bed_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">orig_bed_file</span> <span class="o">=</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span> <span class="o">==</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">orig_bed_file</span> <span class="o">=</span> <span class="n">bed_file</span>
+
+<div class="viewcode-block" id="SNPsFunctionalAnalysis.extract_new_bed_file"><a class="viewcode-back" href="../../nimagen.html#nimagen.genes.SNPsFunctionalAnalysis.extract_new_bed_file">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">extract_new_bed_file</span><span class="p">(</span><span class="n">bed_file</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">],</span>
+                         <span class="n">snps_list</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">fid_list</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">:</span>
+        
+        <span class="sd">&quot;&quot;&quot;[Return a new bed_file object, with selected individual and selected genotyped data]</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            snps_list (Optional[List[str]]): [list of snps]</span>
+<span class="sd">            fid_list (Optional[Union[pd.DataFrame, str, List[str]]]): [list of fid, can be either pd.Dataframe, and it will look for FID column, or path to the dataframe.]</span>
+<span class="sd">            bed_file (Union[str, bed_reader.open_bed]): [the bed file, or path to the bed file]</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            bed_reader.open_bed: [New bed file object with the necessary information for the SNPsFunctionalAnalysis pipeline]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">bed_file</span> <span class="o">=</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">bed_file</span><span class="p">)</span> <span class="o">==</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">fid_list</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">fid_list</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_table</span><span class="p">(</span><span class="n">fid_list</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39; &#39;</span><span class="p">)</span>
+            <span class="n">fid_list</span> <span class="o">=</span> <span class="n">fid_list</span><span class="o">.</span><span class="n">FID</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">fid_list</span><span class="p">)</span> <span class="o">==</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+            <span class="n">fid_list</span> <span class="o">=</span> <span class="n">fid_list</span><span class="o">.</span><span class="n">FID</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+
+        <span class="c1"># always when reading bed file assign the value to genotype attribute</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">bed_file</span><span class="p">,</span> <span class="s1">&#39;genotype&#39;</span><span class="p">):</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">snps_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># change the bed_file SNPs and associated</span>
+            <span class="n">new_sid</span> <span class="o">=</span> <span class="p">[</span><span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">sid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+                <span class="n">bed_file</span><span class="o">.</span><span class="n">sid</span><span class="p">)</span> <span class="k">if</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">snps_list</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span><span class="p">[:,</span> <span class="n">new_sid</span><span class="p">]</span>
+            <span class="c1"># can change the properties dictionary but not the attributes</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;sid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">sid</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;chromosome&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">chromosome</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;cm_position&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">cm_position</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;bp_position&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">bp_position</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;allele_1&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">allele_1</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;allele_2&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">allele_2</span><span class="p">[</span><span class="n">new_sid</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">fid_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># change the bed_file ID info</span>
+            <span class="n">temp_fid_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">fid_list</span><span class="p">]</span> <span class="c1">#set anything in the fid as no &#39;-&#39; if there is &#39;-&#39; in the fid.</span>
+            <span class="n">new_fid</span> <span class="o">=</span> <span class="p">[</span><span class="n">idx</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bed_file</span><span class="o">.</span><span class="n">fid</span><span class="p">)</span> 
+                       <span class="k">if</span> <span class="p">(</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">temp_fid_list</span><span class="p">)]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;fid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">fid</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;iid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">iid</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;father&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">father</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;mother&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">mother</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;sex&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">sex</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;pheno&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">pheno</span><span class="p">[</span><span class="n">new_fid</span><span class="p">]</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span><span class="p">[</span><span class="n">new_fid</span><span class="p">,</span> <span class="p">:]</span>
+            
+        <span class="k">return</span> <span class="n">bed_file</span></div>
+
+<div class="viewcode-block" id="SNPsFunctionalAnalysis.do_mass_univariate_test"><a class="viewcode-back" href="../../nimagen.html#nimagen.genes.SNPsFunctionalAnalysis.do_mass_univariate_test">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">do_mass_univariate_test</span><span class="p">(</span><span class="n">orig_bed_file</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">],</span>
+                         <span class="n">pheno_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">covar_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">pheno_covar_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span>
+                                                          <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">snps_list</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">phenotype</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                         <span class="n">updated_bed_file</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">]]</span><span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        [Perform linear association for each SNP with the phenotype]</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            bed_file (str): [A bed_reader input, this is a bed file]</span>
+<span class="sd">            pheno_file_path (str)</span>
+<span class="sd">            covar_file_path (str)</span>
+<span class="sd">            phenotype (str, optional): [The phenotype of interest]. Defaults to &#39;WM_sum&#39;.</span>
+<span class="sd">            covariate (List[str], optional): [List of phenotypes of interest]. Defaults to [&#39;euro_Anc_PC1&#39;, &#39;euro_Anc_PC2&#39;, &#39;euro_Anc_PC3&#39;, &#39;GA_vol&#39;, &#39;PMA_vol&#39;, &#39;Gender&#39;, &#39;Intracranial_Imperial&#39;].</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            pd.DataFrame: [Dataframe, where each row contains result of univariate test for individual SNP]</span>
+
+<span class="sd">        Note:</span>
+<span class="sd">            The ouput can be compared with the plink linear association file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">pheno_covar_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pheno_covar_file</span><span class="p">,</span><span class="nb">str</span><span class="p">):</span>
+                <span class="n">pheno_covar_file</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_table</span><span class="p">(</span><span class="n">pheno_covar_file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39; &#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pheno_file</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;You must provide Phenotype&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">covar_file</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;You must provide Covariates&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pheno_file</span><span class="p">,</span><span class="nb">str</span><span class="p">):</span>
+                <span class="n">pheno_file</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_table</span><span class="p">(</span><span class="n">pheno_file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">covar_file</span><span class="p">,</span><span class="nb">str</span><span class="p">):</span>
+                <span class="n">covar_file</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_table</span><span class="p">(</span><span class="n">covar_file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">pheno_covar_file</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">pheno_file</span><span class="p">,</span>
+                                        <span class="n">covar_file</span><span class="p">,</span>
+                                        <span class="n">on</span><span class="o">=</span><span class="s1">&#39;FID&#39;</span><span class="p">,</span>
+                                        <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+        <span class="n">fid_list</span> <span class="o">=</span> <span class="n">pheno_covar_file</span><span class="o">.</span><span class="n">FID</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+        <span class="n">covariate</span> <span class="o">=</span> <span class="n">covar_file</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">2</span><span class="p">:]</span> <span class="c1"># if the first two columns are FID and ID</span>
+        <span class="c1">#check if new_bed_file is present:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">updated_bed_file</span><span class="p">:</span>
+            <span class="n">bed_file</span> <span class="o">=</span> <span class="n">SNPsFunctionalAnalysis</span><span class="o">.</span><span class="n">extract_new_bed_file</span><span class="p">(</span><span class="n">snps_list</span><span class="o">=</span><span class="n">snps_list</span><span class="p">,</span>
+                                            <span class="n">fid_list</span><span class="o">=</span><span class="n">fid_list</span><span class="p">,</span>
+                                            <span class="n">bed_file</span><span class="o">=</span><span class="n">orig_bed_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">updated_bed_file</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">bed_file</span> <span class="o">=</span>  <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">(</span><span class="n">updated_bed_file</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">updated_bed_file</span><span class="p">,</span> <span class="n">bed_reader</span><span class="o">.</span><span class="n">open_bed</span><span class="p">):</span>
+                <span class="n">bed_file</span> <span class="o">=</span> <span class="n">updated_bed_file</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Your updated bed file is in wrong format&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">bed_file</span><span class="p">,</span> <span class="s1">&#39;genotype&#39;</span><span class="p">):</span> <span class="c1"># this is required if i provide the updated bed file</span>
+            <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="n">new_fid_list1</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">fid</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="c1"># to make sure that individuals with different fid values are removed</span>
+        <span class="n">new_fid_list2</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">new_fid_list1</span><span class="p">]</span> <span class="c1">#set anything in the fid as no &#39;-&#39; if there is &#39;-&#39; in the fid</span>
+        <span class="n">pheno_covar_file</span> <span class="o">=</span> <span class="n">pheno_covar_file</span><span class="p">[</span><span class="n">pheno_covar_file</span><span class="p">[</span><span class="s1">&#39;FID&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">new_fid_list1</span><span class="o">+</span><span class="n">new_fid_list2</span><span class="p">)]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bed_file_chr</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;chromosome&#39;</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">bed_file_chr</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">properties</span><span class="p">[</span><span class="s1">&#39;chromosome&#39;</span><span class="p">]</span>
+        <span class="n">bed_file_A1</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;allele_1&#39;</span><span class="p">]</span>
+        <span class="n">bed_file_SNPs</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">genotype</span>
+        <span class="n">bed_file_sid</span> <span class="o">=</span> <span class="n">bed_file</span><span class="o">.</span><span class="n">properties_dict</span><span class="p">[</span><span class="s1">&#39;sid&#39;</span><span class="p">]</span>
+        <span class="n">bed_file_SNPs</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">bed_file_SNPs</span><span class="p">)</span>
+        <span class="n">bed_file_SNPs</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="n">bed_file_sid</span>
+        <span class="k">def</span> <span class="nf">perform_univariate_test</span><span class="p">(</span><span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">frame</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">Y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">frame</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">dictionary</span><span class="p">:</span> <span class="n">DefaultDict</span><span class="p">):</span>
+            <span class="sd">&quot;&quot;&quot;[perform univariate test, where the dependent variable is a single column,</span>
+<span class="sd">            and dependent variable is a dataframe, and the name of the SNP of interest is a column]</span>
+
+<span class="sd">            Args:</span>
+<span class="sd">                X (pd.core.frame.DataFrame): [Independent variable, where the SNP of interest is in a column]</span>
+<span class="sd">                Y (pd.core.frame.DataFrame): [Dependent variable, single column]</span>
+<span class="sd">                dictionary (DefaultDict): [Dictionary defined with the keys as the SNP and values stat, P-value, beta]</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">sm</span><span class="o">.</span><span class="n">add_constant</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">sm</span><span class="o">.</span><span class="n">OLS</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">missing</span><span class="o">=</span><span class="s1">&#39;drop&#39;</span><span class="p">)</span>  <span class="c1"># drop any missing values</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">()</span>
+            <span class="n">stat</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">tvalues</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">p_value</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">pvalues</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">beta</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">dictionary</span><span class="p">[</span><span class="s1">&#39;STAT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">stat</span>
+            <span class="n">dictionary</span><span class="p">[</span><span class="s1">&#39;P&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_value</span>
+            <span class="n">dictionary</span><span class="p">[</span><span class="s1">&#39;BETA&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">beta</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">pheno_covar_file</span><span class="p">[[</span><span class="n">phenotype</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">pheno_covar_file</span><span class="p">[</span><span class="n">covariate</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">snp_association</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">snp</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="o">.</span><span class="n">tqdm</span><span class="p">(</span><span class="n">bed_file_sid</span><span class="p">):</span>
+            <span class="n">x</span><span class="p">[</span><span class="s1">&#39;SNP&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file_SNPs</span><span class="p">[[</span><span class="n">snp</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span>
+            <span class="n">perform_univariate_test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">snp_association</span><span class="p">[</span><span class="n">snp</span><span class="p">])</span>
+
+        <span class="n">snp_association</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">snp_association</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">snp_association</span><span class="p">[</span><span class="s1">&#39;A1&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file_A1</span>
+        <span class="n">snp_association</span><span class="p">[</span><span class="s1">&#39;CHR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">bed_file_chr</span>
+        <span class="n">snp_association</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">snp_association</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;SNP&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">snp_association</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">to_list</span><span class="p">()[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="n">snp_association</span> <span class="o">=</span> <span class="n">snp_association</span><span class="p">[[</span><span class="s1">&#39;SNP&#39;</span><span class="p">,</span> <span class="s1">&#39;A1&#39;</span><span class="p">,</span> <span class="s1">&#39;BETA&#39;</span><span class="p">,</span> <span class="s1">&#39;STAT&#39;</span><span class="p">,</span> <span class="s1">&#39;P&#39;</span><span class="p">]]</span>
+
+        <span class="k">return</span> <span class="n">bed_file</span><span class="p">,</span> <span class="n">snp_association</span></div>
+    
+<div class="viewcode-block" id="SNPsFunctionalAnalysis.get_the_best_SNPs"><a class="viewcode-back" href="../../nimagen.html#nimagen.genes.SNPsFunctionalAnalysis.get_the_best_SNPs">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_the_best_SNPs</span><span class="p">(</span><span class="n">snp_association</span><span class="p">,</span>
+                          <span class="n">pcolumn</span> <span class="o">=</span> <span class="s1">&#39;P&#39;</span><span class="p">,</span> 
+                          <span class="n">threshold</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span><span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Retain only the SNPs that past through a threshold.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            snp_association (_type_): dataframe with column names P for p-value and SNP for snps</span>
+<span class="sd">            threshold (_type_): the p-value threshold. Remove all snps that has association strength less than this.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">snp_association</span><span class="p">[</span><span class="n">snp_association</span><span class="p">[</span><span class="n">pcolumn</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">threshold</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SNPsFunctionalAnalysis.SNPs_annotation_to_gene"><a class="viewcode-back" href="../../nimagen.html#nimagen.genes.SNPsFunctionalAnalysis.SNPs_annotation_to_gene">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">SNPs_annotation_to_gene</span><span class="p">(</span><span class="n">snps_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+                            <span class="n">gene_build_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                            <span class="n">window_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;[Annotate SNPs to gene]</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            snps_list (List[str]): [SNPs list of interest]</span>
+<span class="sd">            gene_build_path (str): [path to A gene_build downloaded from https://ctg.cncr.nl/software/magma]</span>
+<span class="sd">            window_size (int, optional): [Symmetric up and down stream window in kilobases from the gene position]. Defaults to 0.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List[pd.core.frame.DataFrame]: [genes_ID: table of genes and corresponding snps, snp_ID: table of SNPs, and corresponding genes]</span>
+
+<span class="sd">        Notes:</span>
+<span class="sd">            Can be compared with MAGMA annotation file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">genes_ID</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="n">snp_ID</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+        <span class="n">window_size</span> <span class="o">=</span> <span class="n">window_size</span><span class="o">*</span><span class="mi">1000</span>
+        <span class="n">snp_not_found</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">gene_build</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_table</span><span class="p">(</span><span class="n">gene_build_path</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Genes_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;CHR&#39;</span><span class="p">,</span>
+                                                                        <span class="s1">&#39;Start&#39;</span><span class="p">,</span> <span class="s1">&#39;Stop&#39;</span><span class="p">,</span> <span class="s1">&#39;Strand&#39;</span><span class="p">,</span> <span class="s1">&#39;Gene_Name&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">snp</span> <span class="ow">in</span> <span class="n">snps_list</span><span class="p">:</span>
+            <span class="n">chromosome</span> <span class="o">=</span> <span class="n">snp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">bp</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">snp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">genes</span> <span class="o">=</span> <span class="n">gene_build</span><span class="p">[(</span><span class="n">gene_build</span><span class="p">[</span><span class="s1">&#39;CHR&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">chromosome</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span>
+                    <span class="n">gene_build</span><span class="p">[</span><span class="s1">&#39;Start&#39;</span><span class="p">]</span><span class="o">-</span><span class="n">window_size</span> <span class="o">&lt;</span> <span class="n">bp</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">bp</span> <span class="o">&lt;</span> <span class="n">gene_build</span><span class="p">[</span><span class="s1">&#39;Stop&#39;</span><span class="p">]</span><span class="o">+</span><span class="n">window_size</span><span class="p">)]</span><span class="o">.</span><span class="n">values</span>
+            <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>  <span class="c1"># the snp not found</span>
+                <span class="n">snp_not_found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">snp</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">gene_attr</span> <span class="ow">in</span> <span class="n">genes</span><span class="p">:</span>  <span class="c1"># there maybe overlaps</span>
+                <span class="n">gene_ID</span> <span class="o">=</span> <span class="n">gene_attr</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># 473</span>
+                <span class="n">gene_start</span> <span class="o">=</span> <span class="n">gene_attr</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>  <span class="c1"># 8412464</span>
+                <span class="n">gene_end</span> <span class="o">=</span> <span class="n">gene_attr</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>  <span class="c1"># 8877699</span>
+                <span class="n">gene_ens_name</span> <span class="o">=</span> <span class="n">gene_attr</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>  <span class="c1"># &#39;RERE&#39;</span>
+                <span class="k">if</span> <span class="n">gene_ID</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">genes_ID</span><span class="p">:</span>
+                    <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+                    <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;CHR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">chromosome</span>
+                    <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;START&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gene_start</span>
+                    <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;STOP&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gene_end</span>
+                    <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;NAME&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gene_ens_name</span><span class="p">)</span>
+
+                <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;SNP&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">snp</span><span class="p">)</span>
+                <span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;N_SNP&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">genes_ID</span><span class="p">[</span><span class="n">gene_ID</span><span class="p">][</span><span class="s1">&#39;SNP&#39;</span><span class="p">])</span>
+
+                <span class="k">if</span> <span class="n">snp</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">snp_ID</span><span class="p">:</span>
+                    <span class="n">snp_ID</span><span class="p">[</span><span class="n">snp</span><span class="p">]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+                <span class="n">snp_ID</span><span class="p">[</span><span class="n">snp</span><span class="p">][</span><span class="s1">&#39;Genes_list&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gene_ID</span><span class="p">)</span>
+                <span class="n">snp_ID</span><span class="p">[</span><span class="n">snp</span><span class="p">][</span><span class="s1">&#39;N_Genes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">snp_ID</span><span class="p">[</span><span class="n">snp</span><span class="p">][</span><span class="s1">&#39;Genes_list&#39;</span><span class="p">])</span>
+                <span class="n">snp_ID</span><span class="p">[</span><span class="n">snp</span><span class="p">][</span><span class="s1">&#39;Genes_NAME&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gene_ens_name</span><span class="p">)</span>
+
+        <span class="n">genes_ID</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">genes_ID</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">genes_ID</span> <span class="o">=</span> <span class="n">genes_ID</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+        <span class="n">genes_ID</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Gene_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;CHR&#39;</span><span class="p">,</span>
+                            <span class="s1">&#39;START&#39;</span><span class="p">,</span> <span class="s1">&#39;STOP&#39;</span><span class="p">,</span> <span class="s1">&#39;NAME&#39;</span><span class="p">,</span> <span class="s1">&#39;SNP&#39;</span><span class="p">,</span> <span class="s1">&#39;N_SNP&#39;</span><span class="p">]</span>
+
+        <span class="n">snp_ID</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">snp_ID</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">snp_ID</span> <span class="o">=</span> <span class="n">snp_ID</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+        <span class="n">snp_ID</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;SNP_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;Genes_list&#39;</span><span class="p">,</span> <span class="s1">&#39;N_Genes&#39;</span><span class="p">,</span> <span class="s1">&#39;Genes_Name&#39;</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">genes_ID</span><span class="p">,</span> <span class="n">snp_ID</span></div></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">NIMAGEN</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, Hai Le.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
