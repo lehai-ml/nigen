@@ -2,3 +2,4 @@
 .DS_Store
 nimagen.egg-info
 test/
+__pycache__/
