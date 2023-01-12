@@ -703,7 +703,7 @@ class SimplePlots:
                 title: Optional[str] = None,
                 fig:Optional[plt.Figure] = None,
                 ax:Optional[plt.Axes] = None,
-                stats:bool=True,
+                return_stats:bool=True,
                 adjust_covar:Optional[dict]=None,
                 scaling:Optional[str] = 'both', **figkwargs) -> None:
         """
@@ -717,26 +717,44 @@ class SimplePlots:
             value on x.
         y : Union[np.ndarray, pd.DataFrame, pd.Series, str]
             value on y.
+        colorby:Union[np.ndarray, pd.DataFrame, pd.Series, str]
+            value to color the scatter points.
+        hue:Union[np.ndarray, pd.DataFrame, pd.Series, str]
+            separate data point by another value in the dataframe (e.g. cohort).
+            It will calculate separate beta and p-value.
+            The default is None.
         data : Optional[pd.DataFrame], optional
             if providing string x,y, then data will be the dataframe. The default is None.
-        hue : Optional[str], optional
-            separate data point by another value in the dataframe (e.g. cohort). It will calculate separate beta and p-value. The default is None.
         combined : Optional[bool], optional
             If use, calculate the total (for all hues) p-val and beta coefs. The default is False.
         title : str, optional
             Title of the graph. The default is None.
-        xlabel : str, optional
-             label on x axis. The default is None.
-        ylabel : str, optional
-            label on y axis. The default is None.
-        axes : np.array, optional
-            if provided plt.subplots. The default is None.
+        fig : plt.Figure, optional
+            The matplotlib figure. The default is None 
+        ax : plt.Axes, optional
+            The matplitlib axes. The default is None.
+        return_stats: bool, optional
+            Whether to calculate the statistics. The default is False.
+        adjust_covar: dict, optional
+            provide variable names to adjust the x or y axes.
+            E.g, {'x':['sex','age'], 'y':['age^2']}
+            Here, the values in x and y axes will be fitted to a linear regrssion model
+            with the name values in the list used as covariates.
         scaling : str, optional
             whether to scale x and y. The default is 'both'.
         **figkwargs :
+            xlabel: str
+            ylabel: str
+            color_label: str
+            colorbar_axes: list. Default [0.95, 0.15,0.01,0.7]
+            cmap: str. Defaults 'Blues'
+            cmap_reversed: bool .Defaults False
+            edgecolors: Defaults face.
             linewdith: float
             markersize: float
-            legend_loc {outside, inside}
+            legend: bool.
+            legend_loc: str
+            fontsize: float
             hide_CI=False
         Returns
         -------
@@ -870,7 +888,7 @@ class SimplePlots:
                 
                 if not combined:
                     ax.scatter(x[:, 0], y,c=color,s=figkwargs['markersize'],edgecolors=edgecolors)
-                    if stats:
+                    if return_stats:
                         ax.plot(x[sorted_x, 0], y_pred[sorted_x], '-', label=corr_label,linewidth=figkwargs['linewidth'])
                     if annotate is not None:
                         for text_id,text in enumerate(annotate):
@@ -994,10 +1012,6 @@ class Brainmap:
         cmap_reversed : bool, optional
             Reverse the color scheme. The default is False.
 
-        Returns
-        -------
-        None.
-
         """
         if isinstance(atlas_file,str):
             self.atlas_file = nib.load(atlas_file)
@@ -1117,6 +1131,9 @@ class Brainmap:
             Each color patch in the legend will correspond to the color in the plot
             Must provide a dictionary, where the key is interger denoting the label.
             And value is the string abbreviation. The default is None.
+        legend: bool, optional
+            Whether to plot the brain legend.
+            The default is True
         atlas_file : Union[str,nib.nifti1.Nifti1Image], optional
             The path to the nifti file, or the nib.load(Nifti file). The default is None.
         cmap : str, optional
