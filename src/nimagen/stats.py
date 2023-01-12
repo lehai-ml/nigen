@@ -12,6 +12,8 @@ import numpy as np
 
 from sklearn.preprocessing import StandardScaler, LabelBinarizer
 from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+
 import tqdm
 from statsmodels.multivariate.cancorr import CanCorr
 
@@ -175,12 +177,15 @@ class MassUnivariate:
             independentVar = pd.DataFrame(independentVar)
             independentVar = sm.add_constant(independentVar)
         
-        if col_to_drop:
+        if isinstance(col_to_drop,str):
+            col_to_drop = [col_to_drop]
+        if isinstance(col_to_drop,list):
             try:
                 independentVar = independentVar.drop(col_to_drop,axis=1)
             except KeyError:
                 # print('You might be trying to remove the categorical data, which in this function is written as Gender_2.0 or sth.')
-                independentVar = independentVar.drop([i for i in col_to_drop if i in independentVar.columns],axis=1)
+                # independentVar = independentVar.drop([i for i in col_to_drop if i in independentVar.columns],axis=1)
+                independentVar = independentVar.drop([i for i in independentVar.columns for col in col_to_drop if col in i],axis=1)
         dependentVar = pd.DataFrame(dependentVar)
         
         return dependentVar,independentVar
@@ -693,7 +698,7 @@ class MassUnivariate:
                             df=df,
                             col_to_drop=col_to_drop,
                             cat_independentVar_cols=cat_independentVar_cols,
-                            cont_independentVar_cols=cont_independentVar_cols,
+                            cont_independentVar_cols=cont_independentVar_cols+[threshold],
                             dependentVar_cols=[dependent_variable])
         
         summary_table = pd.DataFrame.from_dict({(i,j,k): Result_dict[i][j][k] 
@@ -893,3 +898,148 @@ class Stability_tests:
         stats, pval = ttest_ind(group_1, group_2, equal_var=True)
         return stats, pval
 
+class FeatureReduction:
+    
+    @staticmethod
+    def retain_non_zero_features(df:pd.DataFrame,
+                                 dependentVar_cols:Optional[Union[List[str],
+                                                 List[np.ndarray]]] = None,
+                                 threshold:float=0.5)->pd.DataFrame:
+        """
+        Retain non zero features
+        Features that contain more than x number of 0 observation is removed.
+        x is set as threshold.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            DataFrame need to be reduced.
+        dependentVar_cols : Optional[Union[List[str] List[np.ndarray]]], optional
+            List of features need to be reduced. The default is None.
+        threshold : float, optional
+            Features that contained > threshold number of 0 observation
+            is removed. The default is 0.5.
+
+        Returns
+        -------
+        pd.DataFrame
+            Reduced features dataframe.
+
+        """
+        zero_perc_calc=lambda feature: np.sum(feature==0)/len(feature)
+        dependentVars = df.loc[:,dependentVar_cols].copy()
+        cols_to_drop = dependentVars.columns[dependentVars.apply(zero_perc_calc)>threshold]
+        return df.drop(columns=cols_to_drop)
+    
+    
+    @staticmethod
+    def perform_PCA(df:Union[pd.DataFrame,np.ndarray],
+                    dependentVar_cols:Optional[List[str]] = None,
+                    n_components:int=None,
+                    random_state:int=42,
+                    scaling:bool=False):
+        """
+        Perform PCA
+
+        Parameters
+        ----------
+        df : Union[pd.DataFrame,np.ndarray]
+            DataFrame need to be feature reduced.
+        dependentVar_cols : Optional[List[str]], optional
+            List of feature names need to be reduced. The default is None.
+        n_components : int, optional
+            number of components to be retained. The default is None.
+        random_state : int, optional
+            passed to PCA sklearn. The default is 42.
+        scaling : bool, optional
+            apply StandardStandardize to the features. The default is False.
+
+        Returns
+        -------
+        pca : sklearn.pca
+            sklearn pca model.
+        X_pca : np.ndarray
+            Returned PCs.
+        loading_matrix : pd.DataFrame
+            contribution (corr matrix) between each variable to the PC.
+
+        """
+        pca = PCA(n_components=n_components,
+                  random_state=random_state)
+        if dependentVar_cols is not None:
+            if not isinstance(dependentVar_cols,list):
+                dependentVar_cols = [dependentVar_cols]
+        if isinstance(df,pd.DataFrame):
+            if dependentVar_cols is None:
+                X = df.to_numpy()
+            else:
+                X = df[dependentVar_cols].to_numpy()
+        elif isinstance(df,np.ndarray):
+            X = df.copy()
+        if scaling:
+            X = StandardScaler().fit_transform(X)
+        X_pca = pca.fit_transform(X)
+        loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+        if dependentVar_cols is not None:
+            loading_matrix = pd.DataFrame(loadings, index = dependentVar_cols)
+        else:
+            loading_matrix = pd.DataFrame(loadings)
+        return pca, X_pca, loading_matrix    
+    
+    @staticmethod
+    def combine_columns_together(df:pd.DataFrame,
+                                 group_columns:Union[dict,List],
+                                 operation:str = 'sum',
+                                 remove_duplicated:bool=True):
+        """
+        Combine the columns by performing an operation on it.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Data Frame of interest.
+        group_columns_dict : dict
+            Dictionary {'new grouped name': [ list of columns names need to be grouped]}.
+            new grouped name cannot be the same name as the original names
+        operation : str, optional
+            {'sum','mean'}. The default is 'sum
+        remove_duplicated : bool, optional
+            If you don't want to use the new grouped name, but only update the original columns. The default is True.
+            if passing list, then drop the columns
+            Useful when you want to plot
+
+        Returns
+        -------
+        temp_df : pd.DataFrame
+            New updated df
+
+        """
+        temp_df = df.copy()
+        if isinstance(group_columns, dict):
+            for group,column_names in group_columns.items():
+                if operation == 'sum':
+                    temp_df[group] = temp_df[column_names].sum(axis=1)
+                elif operation == 'mean':
+                    temp_df[group] = temp_df[column_names].mean(axis=1)
+                if remove_duplicated:
+                    temp_df.drop(columns = column_names,inplace=True)
+                else:
+                    for column in column_names:
+                        temp_df[column] = temp_df[group]
+                    temp_df.drop(columns = group, inplace=True)
+        elif isinstance(group_columns,list):
+            if not isinstance(group_columns[0],list):
+                raise AttributeError('pass list of list if have only 1 group')
+            for column_names in group_columns:
+                if operation == 'sum':
+                    temp_df['temp'] = temp_df[column_names].sum(axis=1)
+                elif operation == 'mean':
+                    temp_df['temp'] = temp_df[column_names].mean(axis=1)
+                for column in column_names:
+                    temp_df[column] = temp_df['temp']
+                temp_df.drop(columns = 'temp', inplace=True)
+                if remove_duplicated:
+                    temp_df.drop(columns=column_names[1:],inplace=True)
+        return temp_df
+
+      
