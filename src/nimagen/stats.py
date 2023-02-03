@@ -10,6 +10,7 @@ from scipy.stats import ttest_ind, zscore
 import pandas as pd
 import numpy as np
 
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
@@ -898,6 +899,98 @@ class Stability_tests:
         stats, pval = ttest_ind(group_1, group_2, equal_var=True)
         return stats, pval
 
+    @staticmethod
+    
+    def nn_matching(df: Optional[pd.DataFrame] = None,
+                    cat_independentVar_cols: Union[List[str],
+                                                     np.ndarray,
+                                                     pd.DataFrame,
+                                                     pd.Series] = None,
+                    cont_independentVar_cols: Union[List[str],
+                                                     np.ndarray,
+                                                     pd.DataFrame,
+                                                     pd.Series] = None,
+                    dependentVar_cols: Union[List[str],
+                                                     np.ndarray,
+                                                     pd.DataFrame,
+                                                     pd.Series] = None,
+                    scaling: str='x',
+                    random_state=None,
+                    caliper:float=None) ->pd.DataFrame:
+        """
+        Nearest neighbour without replacement pair matching
+        Generate propensity score for each subject and then pair them using nearest neighbour algorithm
+        Propensity score is just the probability of group assignment condiational
+            on observed baseline covariates
+        idea based on this paper : https://onlinelibrary.wiley.com/doi/10.1002/sim.6004
+        Parameters
+        ----------
+        df : Optional[pd.DataFrame], optional
+            data frame already preprocessed to have only 2 groups. The default is None.
+        cat_independentVar_cols : Union[List[str],np.ndarray,pd.DataFrame,pd.Series], optional
+            categorical variable to stratify on. The default is None.
+        cont_independentVar_cols : Union[List[str],np.ndarray,pd.DataFrame,pd.Series], optional
+            continuous variable to stratify on. The default is None.
+        dependentVar_cols : Union[List[str],np.ndarray,pd.DataFrame,pd.Series], optional
+            single column from where the category are from. The default is None.
+        scaling : str, optional
+            whether to standardise. The default is 'x'.
+        random_state : TYPE, optional
+            randomise the nearest neighbour search. The default is None.
+        caliper : float, optional
+            the threshold below which the nearest neighbour distance is evaluated. The default is None.
+        -------
+        pd.DataFrame
+            data frame for group 1
+        pd.DataFrame
+            data frame for group 2
+
+        """
+    
+        groups, X = MassUnivariate.prepare_data(df = df,
+                            cat_independentVar_cols = cat_independentVar_cols,
+                            cont_independentVar_cols = cont_independentVar_cols,
+                            dependentVar_cols = dependentVar_cols,
+                            scaling=scaling)
+        y = groups.values.reshape(-1)
+        if len(np.unique(groups)) != 2:
+            raise ValueError('need exactly 2 groups')
+        if isinstance(caliper,float):
+            if not(0<caliper<1):
+                raise ValueError('caliper must be between 0 and 1')
+        if isinstance(dependentVar_cols,list):
+            if len(dependentVar_cols) > 1:
+                raise ValueError('can match by 1 category')
+            dependentVar_cols = dependentVar_cols[0]
+        #fit logistic regression to get propensity score (i.e., probability of being one class)
+        log_reg = LogisticRegression().fit(X,y)
+        propensity = log_reg.predict_proba(X)[:,1] # predicting the larger group?
+        groups['propensity'] = propensity
+        
+        g1 = groups.loc[groups[dependentVar_cols]==np.unique(y)[0],'propensity']
+        g2 = groups.loc[groups[dependentVar_cols]==np.unique(y)[1],'propensity']
+        
+        if len(g1) > len(g2): #make sure that the first group is smaller one
+            g1, g2 = g2, g1
+        
+        g1 = g1.sample(frac = 1,random_state=random_state) # permute the rows, start from random point
+        g1_retain = []
+        g2_retain = []
+        for idx in g1.index:
+            distance = g1.loc[idx] - g2
+            if isinstance(caliper,float):
+                if distance.min() <= caliper:
+                    g1_retain.append(idx)
+                    g2_retain.append(distance.index[distance.argmin()])
+                    g2 = g2.drop(distance.index[distance.argmin()])
+                    #what to do with the ones that do not have match?
+            else:
+                g1_retain.append(idx)
+                g2_retain.append(distance.index[distance.argmin()])
+                g2 = g2.drop(distance.index[distance.argmin()])
+        
+        return df.iloc[g1_retain], df.iloc[g2_retain]
+        
 class FeatureReduction:
     
     @staticmethod
@@ -1041,5 +1134,3 @@ class FeatureReduction:
                 if remove_duplicated:
                     temp_df.drop(columns=column_names[1:],inplace=True)
         return temp_df
-
-      
