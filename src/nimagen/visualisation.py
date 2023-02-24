@@ -717,6 +717,8 @@ class SimplePlots:
             value on x.
         y : Union[np.ndarray, pd.DataFrame, pd.Series, str]
             value on y.
+            if providing a list of strings (i.e., columns names)
+            then plot by hue is implied. Make sure that x is in 2 dimension.
         colorby:Union[np.ndarray, pd.DataFrame, pd.Series, str]
             value to color the scatter points.
         hue:Union[np.ndarray, pd.DataFrame, pd.Series, str]
@@ -827,6 +829,9 @@ class SimplePlots:
                     elif isinstance(ylabel,str):
                         ylabel = f'Adj. {ylabel}'
                         
+        if x.ndim == 1:
+            x = x.reshape(-1, 1)
+
         if y.ndim > 1 and y.shape[1] > 1:#if y is defined as list, then hue is automatically applied
             if not isinstance(column_names,list):
                 if isinstance(column_names,str):
@@ -841,8 +846,6 @@ class SimplePlots:
             data.columns = ['hue','x','y']
             hue = 'hue'
 
-        if x.ndim == 1:
-            x = x.reshape(-1, 1)
         if y.ndim == 1:
             y = y.reshape(-1, 1)
                 
@@ -1375,28 +1378,29 @@ class Brainmap:
     
     @classmethod
     def get_ROIs_coordinates(cls,
-                             atlas_file:Union[str,nib.nifti1.Nifti1Image]):
+                             atlas_file:Union[str,nib.nifti1.Nifti1Image])->pd.DataFrame:
         """
-        Get ROIs coordinate where the x,y,z are the voxel indices.
+        Get ROIs voxel indices and scanner coordinate.
         Parameters
         ----------
         atlas_file : Union[str,nib.nifti1.Nifti1Image]
             pathway to nifti file or the nib.load nifti file.
-
         Returns
         -------
-        ROIs_coord : dict
+        ROIs_coord : pd.DataFrame
             dictionary where for the key is label, and value is the x,y,z coordinates.
         """
         brain_map = Brainmap(atlas_file)
         brain_map.atlas[np.isnan(brain_map.atlas)] = 0 # if nan exist set to 0
+        transform_matrix = brain_map.atlas_file.affine[:-1,:]
         ROIs_coord = defaultdict(list)
         for label in np.unique(brain_map.atlas):
             if label != 0:
                 ROIs_coord[label] = [coord.mean() for coord in np.where(brain_map.atlas == label)]
+                ROIs_coord[label].extend(list(np.matmul(transform_matrix,np.array(ROIs_coord[label] + [1]))))
         ROIs_coord = pd.DataFrame(ROIs_coord).T
         ROIs_coord.reset_index(inplace=True)
-        ROIs_coord.columns = ['Label','X','Y','Z']
+        ROIs_coord.columns = ['Label','X_vox','Y_vox','Z_vox','X_sca','Y_sca','Z_sca']
         return ROIs_coord
 
         
