@@ -164,6 +164,9 @@ class MassUnivariate:
                 return formula
             right_side = formula
         else:
+            def weird_symbols(key_list):
+                key_list=[f"Q('{k}')" for k in categorical_keys if (' ')]
+                
             right_side = '+'.join([f'C({k})' for k in categorical_keys] + 
                                   [f'standardize({k})' if scaling=='x' or scaling=='both' else k for k in continuous_keys])
             if not fit_intercept:
