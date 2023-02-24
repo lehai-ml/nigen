@@ -6,7 +6,8 @@ from typing import List, Union, Optional
 from collections import defaultdict
 from itertools import combinations
 import statsmodels.api as sm
-from scipy.stats import ttest_ind, zscore
+import statsmodels.formula.api as sfm
+from scipy.stats import ttest_ind, zscore, f
 import pandas as pd
 import numpy as np
 
@@ -20,38 +21,17 @@ from statsmodels.multivariate.cancorr import CanCorr
 
 from numpy.core._exceptions import UFuncTypeError
 
-
 class MassUnivariate:
     
     @staticmethod
-    def prepare_data(df: Optional[pd.DataFrame] = None,
-                    cat_independentVar_cols: Union[List[str],
-                                                    np.ndarray,
-                                                    pd.DataFrame,
-                                                    pd.Series] = None,
-                    cont_independentVar_cols: Union[List[str],
-                                                    np.ndarray,
-                                                    pd.DataFrame,
-                                                    pd.Series] = None,
-                    dependentVar_cols: Union[List[str],
-                                                    np.ndarray,
-                                                    pd.DataFrame,
-                                                    pd.Series] = None,
-                    scaling: str='x',
-                    col_to_drop : Optional[List[str]] = None):
+    def prepare_data(return_type='dict',**kwargs):
         """
         prepare the dependent and independent variables.
 
         Parameters
         ----------
-        df (Optional[pd.DataFrame]): [pandas data frame, where each row is one observation]
-        cat_independentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [list of categorical variables, such that they will be converted to dummies by pandas]. Defaults to None.
-        cont_independentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [list of continuous variables, they will be appended to cat_independentVar_cols]. Defaults to None.
-        dependentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [the dependent variable, the ]. Defaults to None.
-        scaling [str]: Default = both. ('x','y','both','none')
-        If none, we will not perform standard scaler, 'both' we will perform on both x (independent variable- feature) and y (dependent variable- target)
-        col_to_drop [list[str]] = if we want to remove any column from the independent Variable before fitting the model.
-
+        See mass_univariate
+        
         Raises
         ------
         TypeError
@@ -62,136 +42,137 @@ class MassUnivariate:
         dependentvar and independentvar pd.DataFrames.
 
         """
-        if df is not None:
-            new_df = df.copy()
+        df = kwargs.get('df',None)
+        cat_independentVar_cols = kwargs.get('cat_independentVar_cols',None)
+        cont_independentVar_cols = kwargs.get('cont_independentVar_cols',None)
+        dependentVar_cols = kwargs.get('dependentVar_cols',None)
+        col_to_drop = kwargs.get('col_to_drop',None)
+        
+        
         cat_independentVar = defaultdict(list)
         cont_independentVar = defaultdict(list)
         dependentVar = defaultdict(list)
-        independentVar = dict()
-        if isinstance(cat_independentVar_cols, (list,str)):
-            if isinstance(cat_independentVar_cols,str): # if it is just string, put it into list
-                cat_independentVar_cols = [cat_independentVar_cols]
-            for idx, cat_independentVar_col in enumerate(cat_independentVar_cols):
-                if isinstance(cat_independentVar_col,str):
-                    cat_independentVar_temp = pd.get_dummies(new_df[cat_independentVar_col].values,
-                                                            prefix=cat_independentVar_col,
-                                                            drop_first=True).to_dict(orient='list')
-                    cat_independentVar.update(cat_independentVar_temp)
-                else:
-                    raise TypeError('We need list of string, not list of list')
-        elif isinstance(cat_independentVar_cols, np.ndarray):
-            if cat_independentVar_cols.ndim == 1:
-                cat_independentVar_temp = pd.get_dummies(cat_independentVar_cols,
-                                                        prefix='Cat_',
-                                                        drop_first=True).to_dict(orient='list')
-                cat_independentVar.update(cat_independentVar_temp)
-            else:
-                for col in range(cat_independentVar_cols.shape[1]):
-                    cat_independentVar_temp = pd.get_dummies(cat_independentVar_cols[:, col],
-                                                            prefix='Cat_'+str(col)+'_',
-                                                            drop_first=True).to_dict(orient='list')
-                    cat_independentVar.update(cat_independentVar_temp)
         
-        elif isinstance(cat_independentVar_cols,(pd.DataFrame,pd.Series)):
+        ###############CATEGORICAL VARIABLES###############
+        
+        if isinstance(cat_independentVar_cols,(pd.DataFrame,pd.Series)):
             if isinstance(cat_independentVar_cols,pd.Series): # only 1 column
                 cat_independentVar_cols = pd.DataFrame(cat_independentVar_cols)
-            for col in cat_independentVar_cols.columns:
-                cat_independentVar_temp = pd.get_dummies(cat_independentVar_cols[col].values,
-                                                        prefix=cat_independentVar_cols[col].name,
-                                                        drop_first=True).to_dict(orient='list')
-
-                cat_independentVar.update(cat_independentVar_temp)
-
-        if isinstance(cont_independentVar_cols,(list,str)):
-            if isinstance(cont_independentVar_cols,str):
-                cont_independentVar_cols = [cont_independentVar_cols]
-
-            cont_independentVar_temp = np.asarray(
-                new_df.loc[:, cont_independentVar_cols])
-            if cont_independentVar_temp.ndim == 1:
-                cont_independentVar_temp = cont_independentVar.reshape(-1, 1)
-            if scaling=='both' or scaling == 'x':
-                cont_independentVar_temp = StandardScaler().fit_transform(cont_independentVar_temp)
-            cont_independentVar_temp = pd.DataFrame(cont_independentVar_temp)
-            cont_independentVar_temp.columns = cont_independentVar_cols
-            cont_independentVar = cont_independentVar_temp.to_dict(
-                orient='list')
-            
-        elif isinstance(cont_independentVar_cols,(np.ndarray,pd.DataFrame,pd.Series)):
-            if isinstance(cont_independentVar_cols,(pd.DataFrame,pd.Series)):
-                if isinstance(cont_independentVar_cols,pd.Series):
-                    cont_independentVar_cols = pd.DataFrame(cont_independentVar_cols)
-                cont_independentVar_temp = cont_independentVar_cols.values
-            else:
-                cont_independentVar_temp = cont_independentVar_cols
-            if cont_independentVar_temp.ndim == 1:
-                cont_independentVar_temp = cont_independentVar_temp.reshape(-1, 1)
-            if scaling=='both' or scaling == 'x':
-                cont_independentVar_temp = StandardScaler().fit_transform(cont_independentVar_temp)
-            cont_independentVar_temp = pd.DataFrame(cont_independentVar_temp)
-            if isinstance(cont_independentVar_cols,pd.DataFrame):
-                cont_independentVar_temp.columns = cont_independentVar_cols.columns
-            else:
-                cont_independentVar_temp.columns = [
-                    'Cont_'+str(i) for i in range(cont_independentVar_temp.shape[1])]
-            cont_independentVar = cont_independentVar_temp.to_dict(orient='list')
+            cat_independentVar.update(cat_independentVar_cols.to_dict(orient='list'))
         
-        if isinstance(dependentVar_cols,(list,str)):
-            if isinstance(dependentVar_cols,str):
-                dependentVar_cols = [dependentVar_cols]
-            
-            dependentVar_temp = np.asarray(new_df.loc[:, dependentVar_cols])
-            if dependentVar_temp.ndim == 1:
-                dependentVar_temp = dependentVar_temp.reshape(-1, 1)
-            if scaling=='both' or scaling == 'y':
-                dependentVar_temp = StandardScaler().fit_transform(dependentVar_temp)
-            dependentVar_temp = pd.DataFrame(dependentVar_temp)
-            dependentVar_temp.columns = dependentVar_cols
-            dependentVar = dependentVar_temp.to_dict(orient='list')
-            
-        elif isinstance(dependentVar_cols,(np.ndarray,pd.DataFrame,pd.Series)):
-            if isinstance(dependentVar_cols,(pd.DataFrame,pd.Series)):
-                if isinstance(dependentVar_cols,pd.Series):
-                    dependentVar_cols = pd.DataFrame(dependentVar_cols)
-                dependentVar_temp =  dependentVar_cols.values
-            else:
-                dependentVar_temp = dependentVar_cols
-            if dependentVar_temp.ndim == 1:
-                dependentVar_temp = dependentVar_temp.reshape(-1, 1)
-            if scaling=='both' or scaling == 'y':
-                dependentVar_temp = StandardScaler().fit_transform(dependentVar_temp)
-            dependentVar_temp = pd.DataFrame(dependentVar_temp)
-            if isinstance(dependentVar_cols,pd.DataFrame):
-                dependentVar_temp.columns = dependentVar_cols.columns
-            else:
-                dependentVar_temp.columns = [
-                    'Dependent_Var_'+str(i) for i in range(dependentVar_temp.shape[1])]
-            dependentVar = dependentVar_temp.to_dict(orient='list')
+        elif isinstance(cat_independentVar_cols, np.ndarray):
+            # if array, check dimension, each column is treated as an independent variable
+            if cat_independentVar_cols.ndim == 1:
+                cat_independentVar_cols = cat_independentVar_cols.reshape(-1,1)
+            for col in range(cat_independentVar_cols.shape[1]):
+                cat_independentVar.update({f'Cat_{col}':cat_independentVar_cols[:,col]})   
         
-        independentVar.update(cont_independentVar)
-        independentVar.update(cat_independentVar)
-        if not independentVar:
-            independentVar['const'] = [1. for i in range(
-                len(list(dependentVar.values())[0]))]
-            independentVar = pd.DataFrame(independentVar)
-        else:
-            independentVar = pd.DataFrame(independentVar)
-            independentVar = sm.add_constant(independentVar)
+        elif isinstance(cat_independentVar_cols,(list,str)):
+            if all(isinstance(variable, str) for variable in cat_independentVar_cols) and isinstance(df, pd.DataFrame):
+                # if it is string
+                if isinstance(cat_independentVar_cols,str):
+                    cat_independentVar_cols = [cat_independentVar_cols]
+                cat_independentVar.update(df[cat_independentVar_cols].to_dict(orient='list'))
+            else:
+                raise TypeError('Check again input for categorical data, make sure it is list of strings, not list of lists of strings')
+            
+        ###############CONTINUOUS VARIABLES###############
+        if isinstance(cont_independentVar_cols, (pd.DataFrame,pd.Series)):
+            if isinstance(cont_independentVar_cols,pd.Series): # only 1 column
+                cont_independentVar_cols = pd.DataFrame(cont_independentVar_cols)
+            cont_independentVar.update(cont_independentVar_cols.to_dict(orient='list'))
         
+        elif isinstance(cont_independentVar_cols, np.ndarray):
+            # if array, check dimension, each column is treated as an independent variable
+            if cont_independentVar_cols.ndim == 1:
+                cont_independentVar_cols = cont_independentVar_cols.reshape(-1,1)
+            for col in range(cont_independentVar_cols.shape[1]):
+                cont_independentVar.update({f'Cont_{col}':cont_independentVar_cols[:,col]})
+        
+        elif isinstance(cont_independentVar_cols,(list,str)):
+            if all(isinstance(variable, str) for variable in cont_independentVar_cols) and isinstance(df, pd.DataFrame):
+                if isinstance(cont_independentVar_cols,str):
+                    cont_independentVar_cols = [cont_independentVar_cols]
+                cont_independentVar.update(df[cont_independentVar_cols].to_dict(orient='list'))
+            else:
+                raise TypeError('Check again input for continuous data, make sure it is list of strings, not list of lists of strings')
+    
+        
+        ###############DEPENDENT VARIABLES###############
+        if isinstance(dependentVar_cols, (pd.DataFrame,pd.Series)):
+            if isinstance(dependentVar_cols,pd.Series): # only 1 column
+                dependentVar_cols = pd.DataFrame(dependentVar_cols)
+            dependentVar.update(dependentVar_cols.to_dict(orient='list'))
+            
+        elif isinstance(dependentVar_cols, np.ndarray):
+            # if array, check dimension, each column is treated as an independent variable
+            if dependentVar_cols.ndim == 1:
+                dependentVar_cols = dependentVar_cols.reshape(-1,1)
+            for col in range(dependentVar_cols.shape[1]):
+                dependentVar.update({f'Dependent_Var_{col}':dependentVar_cols[:,col]})
+        
+        elif isinstance(dependentVar_cols,(list,str)):
+            if all(isinstance(variable, str) for variable in dependentVar_cols) and isinstance(df, pd.DataFrame):
+                if isinstance(dependentVar_cols,str):
+                    dependentVar_cols = [dependentVar_cols]
+                dependentVar.update(df[dependentVar_cols].to_dict(orient='list'))
+                
+            else:
+                raise TypeError('Check again input for dependent data, \
+                                make sure it is list of strings, not list of lists of strings')
+        
+        ##############REMOVE any variable#################
         if isinstance(col_to_drop,str):
             col_to_drop = [col_to_drop]
         if isinstance(col_to_drop,list):
-            try:
-                independentVar = independentVar.drop(col_to_drop,axis=1)
-            except KeyError:
-                # print('You might be trying to remove the categorical data, which in this function is written as Gender_2.0 or sth.')
-                # independentVar = independentVar.drop([i for i in col_to_drop if i in independentVar.columns],axis=1)
-                independentVar = independentVar.drop([i for i in independentVar.columns for col in col_to_drop if col in i],axis=1)
-        dependentVar = pd.DataFrame(dependentVar)
+            for col in col_to_drop:
+                cat_independentVar.pop(col,None)
+                cont_independentVar.pop(col,None)
+                dependentVar.pop(col,None)
         
-        return dependentVar,independentVar
+        if return_type=='dict':
+            return cat_independentVar, cont_independentVar, dependentVar
+        elif return_type=='dataframe':
+            return pd.DataFrame(cat_independentVar), pd.DataFrame(cont_independentVar), pd.DataFrame(dependentVar)
 
+    @staticmethod
+    def print_lm_summary(model,return_ancova=False,**kwargs):
+        typ=kwargs.get('typ',1)
+        result = [None] * (len(model.params) + len(model.pvalues))
+        result[::2] = model.params
+        result[1::2] = model.pvalues
+        if return_ancova:
+            anova_table = sm.stats.anova_lm(model, typ=typ)
+            anova_table = anova_table[['F','PR(>F)']][:-1].to_dict(orient='list') # the last row is residual no need
+            anova_result = [None] * (len(anova_table['F'])+len(anova_table['PR(>F)']))
+            anova_result[::2] = anova_table['F']
+            anova_result[1::2] = anova_table['PR(>F)']
+            result = result + anova_result
+        return result
     
+
+    @staticmethod
+    def patsy_formula(dependent_key:str,
+                      categorical_keys:List[str]=None,
+                      continuous_keys:List[str]=None,
+                      fit_intercept=True, 
+                      logistic=False,
+                      scaling='x',
+                      formula=None):
+        if isinstance(formula,str):
+            if '~' in formula:
+                return formula
+            right_side = formula
+        else:
+            right_side = '+'.join([f'C({k})' for k in categorical_keys] + 
+                                  [f'standardize({k})' if scaling=='x' or scaling=='both' else k for k in continuous_keys])
+            if not fit_intercept:
+                right_side = right_side + ' -1'
+        left_side = f'C({dependent_key})' if logistic else dependent_key
+        if not logistic and (scaling=='y' or scaling=='both'):
+            left_side = f'standardize({left_side})'
+        return '~'.join([left_side,right_side])
+        
     @staticmethod
     def mass_univariate(df: Optional[pd.DataFrame] = None,
                         cat_independentVar_cols: Union[List[str],
@@ -206,9 +187,13 @@ class MassUnivariate:
                                                         np.ndarray,
                                                         pd.DataFrame,
                                                         pd.Series] = None,
+                        formula: str = None,
+                        fit_intercept=True,
+                        logistic=False,
                         scaling: str='x',
+                        return_ancova=False,
                         col_to_drop : Optional[List[str]] = None,
-                        additional_info=None) -> Union[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]:
+                        additional_info=None,**kwargs) -> Union[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]:
         """[Returns the model and model summary
             Performs univariate test, implements statsmodel.api.OLS]
 
@@ -217,7 +202,7 @@ class MassUnivariate:
             cat_independentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [list of categorical variables, such that they will be converted to dummies by pandas]. Defaults to None.
             cont_independentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [list of continuous variables, they will be appended to cat_independentVar_cols]. Defaults to None.
             dependentVar_cols (Optional[Union[List[str], List[np.ndarray]]], optional): [the dependent variable, the ]. Defaults to None.
-            scaling [str]: Default = both. ('x','y','both','none')
+            scaling [str]: Default = both. ('x','y','both','none') # if scaling both = essentially calculating correlation
             If none, we will not perform standard scaler, 'both' we will perform on both x (independent variable- feature) and y (dependent variable- target)
             col_to_drop [list[str]] = if we want to remove any column from the independent Variable before fitting the model.
             additional_info ([type], optional): [additional columns to be appended]. Defaults to None.
@@ -225,34 +210,63 @@ class MassUnivariate:
         Returns:
             Union[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]: [the statsmodel model and dataframe of the model summary, where cols are independent variables and const]
         """
-        model_summary = defaultdict(list)
+        lm_summary = defaultdict(list)
         
-        dependentVar, independentVar = MassUnivariate.prepare_data(df = df,
-                                    cat_independentVar_cols=cat_independentVar_cols,
-                                    cont_independentVar_cols=cont_independentVar_cols,
-                                    dependentVar_cols=dependentVar_cols,
-                                    scaling=scaling,
-                                    col_to_drop=col_to_drop)
-
+        df_dictionary = df.to_dict(orient='list')
         
-        for feature in dependentVar.columns:
-            last_model = sm.OLS(dependentVar.loc[:, feature], independentVar).fit()
-            result = [None] * (len(last_model.params) + len(last_model.pvalues))
-            result[::2] = last_model.params
-            result[1::2] = last_model.pvalues
-            model_summary[feature].extend(result)
+        cat_independentVar,cont_independentVar,dependentVar = MassUnivariate.prepare_data(df=df,
+                                                                                          cat_independentVar_cols=cat_independentVar_cols,
+                                                                                          cont_independentVar_cols=cont_independentVar_cols,
+                                                                                          dependentVar_cols=dependentVar_cols,
+                                                                                          col_to_drop = col_to_drop)
+        
+        
+        if isinstance(formula,str) and isinstance(df,pd.DataFrame):
+            # if formula is provided, straightforward just plug and play.
+            if '~' in formula: # ignore all other inputed variables
+                last_model = sfm.ols(formula, data=df).fit()
+                return last_model
+            else: # providing only the independent variable, but not y
+            #here we can have multiple y if needed
+                df_dictionary.update(dependentVar)
+                for feature in dependentVar.keys():
+                    formula_temp= MassUnivariate.patsy_formula(feature,
+                                                               formula=formula,
+                                                               logistic=logistic)
+                    last_model = sfm.ols(formula_temp,data = df_dictionary).fit()
+                    lm_summary[feature].extend(MassUnivariate.print_lm_summary(last_model,return_ancova=return_ancova,**kwargs))
+                    
+        
+        elif formula is None:
+            for feature in dependentVar.keys():
+                formula_temp = MassUnivariate.patsy_formula(feature,
+                                                            cat_independentVar.keys(),
+                                                            cont_independentVar.keys(),
+                                                            fit_intercept=fit_intercept,
+                                                            logistic=logistic)
+                temp_dataset = dict()
+                temp_dataset.update(cat_independentVar)
+                temp_dataset.update(cont_independentVar)
+                temp_dataset.update({feature:dependentVar[feature]})
+                
+                last_model = sfm.ols(formula_temp,data=temp_dataset).fit()
+                lm_summary[feature].extend(MassUnivariate.print_lm_summary(last_model,return_ancova=return_ancova,**kwargs))
 
-        model_summary = pd.DataFrame(model_summary).T
-        list1 = independentVar.columns.to_list()
+        lm_summary = pd.DataFrame(lm_summary).T
+        list1 = last_model.model.exog_names
         list2 = ['_coef', '_pval']
-
-        model_summary.columns = [i + n for i in list1 for n in list2]
+        lm_summary_columns = [i + n for i in list1 for n in list2]
+        if return_ancova:
+            list1 = last_model.model.data.design_info.term_names[1:] #first one is intercept not needed
+            list2 = ['_F','_(PR>F)']
+            lm_summary_columns = lm_summary_columns + [i + n for i in list1 for n in list2]
+        lm_summary.columns = lm_summary_columns
+        
+        
         if additional_info:
-            model_summary['Additional_info'] = additional_info
-            model_summary.columns = [i + n for i in list1
-                                    for n in list2] + ['Additional_info']
-
-        return last_model, model_summary
+            lm_summary['Additional_info'] = additional_info
+            lm_summary.columns = [i for i in lm_summary.columns if 'Additional_info' not in i] + ['Additional_info']
+        return last_model, lm_summary
     
     @staticmethod
     def remove_outliers(df:pd.DataFrame,
@@ -710,6 +724,7 @@ class MassUnivariate:
         
         return summary_table
         
+
 def matSpDLite(correlation_matrix:np.ndarray,alpha:str = 0.05):
     """
     Adapted from Nyholt DR R script.
@@ -870,13 +885,15 @@ class Stability_tests:
     
         Returns:
             Union[np.ndarray]: [list of indices]
+            high_risk_indices, low_risk_indices
         """
-    
         high_risk_number = int(np.ceil(high_perc*len(y)))
         low_risk_number = int(np.ceil(low_perc*len(y)))
         if high_risk_number+low_risk_number > len(y):
             raise Exception('The high and low risk selection overlapped')
         # bottom
+        if isinstance(y,pd.Series):
+            y = y.values
         low_risk = np.argsort(y)[:low_risk_number]
         # top
         high_risk = np.argsort(y)[::-1][:high_risk_number]
@@ -900,7 +917,7 @@ class Stability_tests:
         return stats, pval
 
     @staticmethod
-    
+
     def nn_matching(df: Optional[pd.DataFrame] = None,
                     cat_independentVar_cols: Union[List[str],
                                                      np.ndarray,
@@ -915,8 +932,10 @@ class Stability_tests:
                                                      pd.DataFrame,
                                                      pd.Series] = None,
                     scaling: str='x',
-                    random_state=None,
-                    caliper:float=None) ->pd.DataFrame:
+                    random_state:int=None,
+                    order:str='random',
+                    threshold:float=None,
+                    **kwargs) ->pd.DataFrame:
         """
         Nearest neighbour without replacement pair matching
         Generate propensity score for each subject and then pair them using nearest neighbour algorithm
@@ -935,9 +954,13 @@ class Stability_tests:
             single column from where the category are from. The default is None.
         scaling : str, optional
             whether to standardise. The default is 'x'.
-        random_state : TYPE, optional
+        random_state : int, optional
             randomise the nearest neighbour search. The default is None.
-        caliper : float, optional
+        order: str, optional
+            {'random','ascending'} if random, the nearest neighbour will be randomly initialised.
+                if ascending, then the propensity score will be ordered, so the lowest ones
+                will find the matching first.
+        threshold : float, optional
             the threshold below which the nearest neighbour distance is evaluated. The default is None.
         -------
         pd.DataFrame
@@ -946,18 +969,21 @@ class Stability_tests:
             data frame for group 2
 
         """
-    
-        groups, X = MassUnivariate.prepare_data(df = df,
+         
+        X_cat, X_cont, groups = MassUnivariate.prepare_data(df = df,
                             cat_independentVar_cols = cat_independentVar_cols,
                             cont_independentVar_cols = cont_independentVar_cols,
-                            dependentVar_cols = dependentVar_cols,
-                            scaling=scaling)
+                            dependentVar_cols = dependentVar_cols,return_type='dataframe',**kwargs)
+        if scaling == 'x':
+            if not X_cont.empty:
+                X_cont = StandardScaler().fit_transform(X_cont)
+        X = pd.concat([X_cat,X_cont],axis=1)
         y = groups.values.reshape(-1)
         if len(np.unique(groups)) != 2:
             raise ValueError('need exactly 2 groups')
-        if isinstance(caliper,float):
-            if not(0<caliper<1):
-                raise ValueError('caliper must be between 0 and 1')
+        if isinstance(threshold,float):
+            if not(0<threshold<1):
+                raise ValueError('threshold must be between 0 and 1')
         if isinstance(dependentVar_cols,list):
             if len(dependentVar_cols) > 1:
                 raise ValueError('can match by 1 category')
@@ -973,13 +999,16 @@ class Stability_tests:
         if len(g1) > len(g2): #make sure that the first group is smaller one
             g1, g2 = g2, g1
         
-        g1 = g1.sample(frac = 1,random_state=random_state) # permute the rows, start from random point
+        if order == 'random':
+            g1 = g1.sample(frac = 1,random_state=random_state) # permute the rows, start from random point
+        if order == 'ascending':
+            g1 = g1.sort_values(ascending=True)
         g1_retain = []
         g2_retain = []
         for idx in g1.index:
-            distance = g1.loc[idx] - g2
-            if isinstance(caliper,float):
-                if distance.min() <= caliper:
+            distance = abs(g1.loc[idx] - g2)
+            if isinstance(threshold,float):
+                if distance.min() <= threshold:
                     g1_retain.append(idx)
                     g2_retain.append(distance.index[distance.argmin()])
                     g2 = g2.drop(distance.index[distance.argmin()])
@@ -1030,7 +1059,7 @@ class FeatureReduction:
                     dependentVar_cols:Optional[List[str]] = None,
                     n_components:int=None,
                     random_state:int=42,
-                    scaling:bool=False):
+                    scaling:bool=True):
         """
         Perform PCA
 
@@ -1045,7 +1074,8 @@ class FeatureReduction:
         random_state : int, optional
             passed to PCA sklearn. The default is 42.
         scaling : bool, optional
-            apply StandardStandardize to the features. The default is False.
+            apply StandardStandardize to the features. The default is True.
+            sklearn PCA doesn't automatically do it. It only substract the mean.
 
         Returns
         -------
