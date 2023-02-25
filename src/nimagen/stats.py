@@ -155,25 +155,40 @@ class MassUnivariate:
     def patsy_formula(dependent_key:str,
                       categorical_keys:List[str]=None,
                       continuous_keys:List[str]=None,
-                      fit_intercept=True, 
-                      logistic=False,
-                      scaling='x',
-                      formula=None):
+                      fit_intercept=True,
+                      scaling:str='x',
+                      formula:str=None):
+        """Create patsy formula (i.e., R style formula to fit to ols)
+
+        Args:
+            dependent_key (str): The dependent key on the left side of the equation
+            categorical_keys (List[str], optional): The list of categorical keys on the right side of the equation
+            continuous_keys (List[str], optional): The list of continuous keys on the right side of the equation
+            fit_intercept (bool, optional): Defaults to True.
+            scaling (str, optional): Whether to perform standardize; can be {'x','y' or 'both'}. Defaults to 'x'.
+            formula (str, optional): formula in R style. Defaults to None.
+
+        Returns:
+            formula: str formula in R style
+        """
         if isinstance(formula,str):
             if '~' in formula:
                 return formula
             right_side = formula
         else:
             def weird_symbols(key_list):
-                key_list=[f"Q('{k}')" for k in categorical_keys if (' ')]
-                
+                if not isinstance(key_list,str):
+                    return [f"Q('{k}')" if (' ' in k) else k for k in key_list]
+                return f"Q('{key_list}')" if (' ' in key_list) else key_list
+            categorical_keys = weird_symbols(categorical_keys)
+            continuous_keys = weird_symbols(continuous_keys)
+            dependent_key = weird_symbols(dependent_key)
             right_side = '+'.join([f'C({k})' for k in categorical_keys] + 
                                   [f'standardize({k})' if scaling=='x' or scaling=='both' else k for k in continuous_keys])
             if not fit_intercept:
                 right_side = right_side + ' -1'
-        left_side = f'C({dependent_key})' if logistic else dependent_key
-        if not logistic and (scaling=='y' or scaling=='both'):
-            left_side = f'standardize({left_side})'
+                
+        left_side = f'standardize({dependent_key})' if scaling=='y' or scaling=='both' else dependent_key 
         return '~'.join([left_side,right_side])
         
     @staticmethod
@@ -192,7 +207,6 @@ class MassUnivariate:
                                                         pd.Series] = None,
                         formula: str = None,
                         fit_intercept=True,
-                        logistic=False,
                         scaling: str='x',
                         return_ancova=False,
                         col_to_drop : Optional[List[str]] = None,
@@ -235,18 +249,17 @@ class MassUnivariate:
                 for feature in dependentVar.keys():
                     formula_temp= MassUnivariate.patsy_formula(feature,
                                                                formula=formula,
-                                                               logistic=logistic)
+                                                               )
                     last_model = sfm.ols(formula_temp,data = df_dictionary).fit()
                     lm_summary[feature].extend(MassUnivariate.print_lm_summary(last_model,return_ancova=return_ancova,**kwargs))
-                    
-        
+
         elif formula is None:
             for feature in dependentVar.keys():
                 formula_temp = MassUnivariate.patsy_formula(feature,
                                                             cat_independentVar.keys(),
                                                             cont_independentVar.keys(),
                                                             fit_intercept=fit_intercept,
-                                                            logistic=logistic)
+                                                            scaling=scaling)
                 temp_dataset = dict()
                 temp_dataset.update(cat_independentVar)
                 temp_dataset.update(cont_independentVar)
