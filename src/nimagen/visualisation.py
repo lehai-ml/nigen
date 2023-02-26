@@ -964,8 +964,11 @@ class SimplePlots:
             adjust_covar:dict = None,
             **figkwargs) -> Optional[plt.Axes]:
         
-        x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str')
-        y,ylabel,_ = SimplePlots.return_array(y,data=data)
+        xlabel=figkwargs.get('xlabel',None)
+        ylabel=figkwargs.get('ylabel',None)
+        
+        x,xlabel,_ = SimplePlots.return_array(x,data=data,variable_label=xlabel,must_be='str')
+        y,ylabel,_ = SimplePlots.return_array(y,variable_label=ylabel,data=data)
         separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str')
         hue,hue_legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str')
         
