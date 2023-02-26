@@ -960,7 +960,9 @@ class SimplePlots:
             data: Optional[pd.DataFrame] = None,
             title:Optional[str] = None,
             fig:Optional[plt.Figure] = None,
-            ax:Optional[plt.Axes] = None, **figkwargs) -> Optional[plt.Axes]:
+            ax:Optional[plt.Axes] = None,
+            adjust_covar:dict = None,
+            **figkwargs) -> Optional[plt.Axes]:
         
         x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str')
         y,ylabel,_ = SimplePlots.return_array(y,data=data)
@@ -970,6 +972,39 @@ class SimplePlots:
         #ax.boxplot takes in a list of lists.
         separateby = [None for i in range(len(x))] if separateby is None else separateby
         hue = [None for i in range(len(x))] if hue is None else hue
+        
+        if adjust_covar is not None:
+            if 'x' in adjust_covar:
+                cat_independentVar_cols = [independentVar for independentVar in adjust_covar['x'] if data[independentVar].dtype == 'object']
+                cont_independentVar_cols = [independentVar for independentVar in adjust_covar['x'] if data[independentVar].dtype != 'object']
+                if len(cat_independentVar_cols) == 0:
+                    cat_independentVar_cols = None
+                if len(cont_independentVar_cols) == 0:
+                    cont_independentVar_cols = None
+                adj_x = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
+                                                                                       cat_independentVar_cols=cat_independentVar_cols,
+                                                                                       cont_independentVar_cols=cont_independentVar_cols,
+                                                                                       dependentVar_cols=x)
+                x = adj_x.values.reshape(-1)
+                if xlabel is not None:
+                    xlabel = f'Adj. {xlabel}'
+            if 'y' in adjust_covar:
+                cat_independentVar_cols = [independentVar for independentVar in adjust_covar['y'] if data[independentVar].dtype == 'object']
+                cont_independentVar_cols = [independentVar for independentVar in adjust_covar['y'] if data[independentVar].dtype != 'object']
+                if len(cat_independentVar_cols) == 0:
+                    cat_independentVar_cols = None
+                if len(cont_independentVar_cols) == 0:
+                    cont_independentVar_cols = None
+                adj_y = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
+                                                                                       cat_independentVar_cols=cat_independentVar_cols,
+                                                                                       cont_independentVar_cols=cont_independentVar_cols,
+                                                                                       dependentVar_cols=y)
+                y = adj_y.values.reshape(-1)
+                if ylabel is not None:
+                    if isinstance(ylabel,list):
+                        ylabel = [f'Adj. {i}' for i in ylabel]
+                    elif isinstance(ylabel,str):
+                        ylabel = f'Adj. {ylabel}'
 
         #you want to groupby x in case x is not unique.
         to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y)
@@ -1126,40 +1161,40 @@ class SimplePlots:
             
         
         
-def draw_box_plots(df,
-                   dependentVar=None,
-                   independentVar=None,
-                   threshold=None,
-                   percentage=0.2,
-                   ancestry_PCs=None,
-                   ylabel=None,ax=None):
-    """
-    draw box plots by dividing the dataset into high and low risk
-    """
-    if not independentVar:
-        measure = np.asarray(df[dependentVar])
-    else:
-        measure = stats.MassUnivariate.adjust_covariates_with_lin_reg(np.asarray(
-            df[dependentVar]), StandardScaler().fit_transform(df[independentVar]))
+# def draw_box_plots(df,
+#                    dependentVar=None,
+#                    independentVar=None,
+#                    threshold=None,
+#                    percentage=0.2,
+#                    ancestry_PCs=None,
+#                    ylabel=None,ax=None):
+#     """
+#     draw box plots by dividing the dataset into high and low risk
+#     """
+#     if not independentVar:
+#         measure = np.asarray(df[dependentVar])
+#     else:
+#         measure = stats.MassUnivariate.adjust_covariates_with_lin_reg(np.asarray(
+#             df[dependentVar]), StandardScaler().fit_transform(df[independentVar]))
 
-    high_risk, low_risk = stats.divide_high_low_risk(stats.MassUnivariate.adjust_covariates_with_lin_reg(
-        np.asarray(df[threshold]), StandardScaler().fit_transform(df[ancestry_PCs])), low_perc=percentage, high_perc=percentage)
+#     high_risk, low_risk = stats.divide_high_low_risk(stats.MassUnivariate.adjust_covariates_with_lin_reg(
+#         np.asarray(df[threshold]), StandardScaler().fit_transform(df[ancestry_PCs])), low_perc=percentage, high_perc=percentage)
 
-    measure_df = pd.DataFrame({'measure': measure.reshape(-1), 'risk': [
-                              'high risk' if i in high_risk else 'low risk' if i in low_risk else np.nan for i in range(len(measure))]}).dropna()
-    stats, pval = ttest_ind(measure_df[measure_df['risk'] == 'low risk']['measure'],
-                            measure_df[measure_df['risk'] == 'high risk']['measure'], equal_var=True)
-    low_risk_mean = measure_df[measure_df['risk']
-                               == 'low risk']['measure'].mean(axis=0)
-    high_risk_mean = measure_df[measure_df['risk']
-                                == 'high risk']['measure'].mean(axis=0)
+#     measure_df = pd.DataFrame({'measure': measure.reshape(-1), 'risk': [
+#                               'high risk' if i in high_risk else 'low risk' if i in low_risk else np.nan for i in range(len(measure))]}).dropna()
+#     stats, pval = ttest_ind(measure_df[measure_df['risk'] == 'low risk']['measure'],
+#                             measure_df[measure_df['risk'] == 'high risk']['measure'], equal_var=True)
+#     low_risk_mean = measure_df[measure_df['risk']
+#                                == 'low risk']['measure'].mean(axis=0)
+#     high_risk_mean = measure_df[measure_df['risk']
+#                                 == 'high risk']['measure'].mean(axis=0)
 
-    sns.boxplot(x='risk', y='measure', data=measure_df,ax=ax)
-    if not independentVar:
-        ax.set_ylabel(ylabel)
-    else:
-        ax.set_ylabel('corrected ' + ylabel)
-    ax.text(0, 0, 't-test pval=%0.03f' % (pval))
+#     sns.boxplot(x='risk', y='measure', data=measure_df,ax=ax)
+#     if not independentVar:
+#         ax.set_ylabel(ylabel)
+#     else:
+#         ax.set_ylabel('corrected ' + ylabel)
+#     ax.text(0, 0, 't-test pval=%0.03f' % (pval))
 
 class Brainmap:
     """
