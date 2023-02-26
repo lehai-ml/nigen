@@ -954,10 +954,9 @@ class SimplePlots:
 
     def Box(x: Union[np.ndarray,pd.DataFrame,pd.Series,list,str],
             y: Union[np.ndarray, pd.DataFrame, pd.Series,list, str],
-            colorby:Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
             separateby:Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
             hue: Union[np.ndarray,pd.DataFrame,pd.Series,list,str] = None,
-            order:Optional[Union[list,dict,str]]='y',
+            order:Optional[Union[list,str]]=None,
             data: Optional[pd.DataFrame] = None,
             title:Optional[str] = None,
             fig:Optional[plt.Figure] = None,
@@ -965,66 +964,47 @@ class SimplePlots:
         
         x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str')
         y,ylabel,_ = SimplePlots.return_array(y,data=data)
-        colorby,colorbar_label,_ = SimplePlots.return_array(colorby,data=data)
         separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str')
-        hue,legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str')
+        hue,hue_legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str')
         
         #ax.boxplot takes in a list of lists.
-        if (hue is not None) and (colorby is not None):
-            #if both hue and colorby is present, show only hue
-            colorby = None
-            colorbar_label = None
         separateby = [None for i in range(len(x))] if separateby is None else separateby
-        colorby = [0 for i in range(len(x))] if colorby is None else colorby
         hue = [None for i in range(len(x))] if hue is None else hue
 
         #you want to groupby x in case x is not unique.
-        to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y,colorby=colorby)
+        to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y)
         
-        all_boxes = list(set(product(separateby,x,hue))) # all the bars combinations
-        #each tuple in the all_boxes denote what element is found in that box.
-        #the separateby value, the x value and the hue value.
-        #separateby value is to separate into multiplot.
-        #the hue is to separate into multi boxes within plot. Similar to hue in seaborn.
-        def getFromDict(dictionary,mapList):
-            #convenience function where you get the values from dictionary by passing a list of keys.
-            return reduce(operator.getitem, mapList,dictionary)
+        if isinstance(order,list):
+            if not all(isinstance(item,str) for item in order):
+                raise TypeError('order must be list of strings')
+            for x_val in order:
+                if x_val not in np.unique(x):
+                    raise ValueError('the value in the order does not exist in x-value')
+            for x_val in np.unique(x):
+                if x_val not in order:
+                    raise ValueError('you must specify the order of all x values')
+            to_plot_dictionary = {separateby: {keys:to_plot_dictionary[separateby][keys] for keys in order} for separateby in to_plot_dictionary.keys()}
         
-        def get_unique(x:np.ndarray):
-            #conveninece function to return unique values but in preserved order
-            if isinstance(x,list):
-                new_x = np.ndarray(x)
-            else:
-                new_x = x.copy()
-            _,idx = np.unique(new_x,return_index=True)
-            return new_x[np.sort(idx)]
-        
-        all_values = []
-        for keys in all_boxes: # [dict][key1][key2][key3]
-            all_values.append(tuple(getFromDict(to_plot_dictionary,keys).values()))
-        #all_values is a list of tuples. each tuple corresponds to a box
-        #in all_boxes. In the tuple, 2 values are given. The first is the
-        #y-value, and the second is the colorby value.
-        
-        separateby = np.array(all_boxes)[:,0]
-        x = np.array(all_boxes)[:,1]
-        hue = np.array(all_boxes)[:,2]
-        
-        y = [i[0] for i in all_values]
-        colorby = list(chain.from_iterable([i[1] for i in all_values]))
+        # If you are comparing sex by three conditions . Here, sex label is on 
+        # the x axis, and at each positions, are three conditions (i.e. hue). 
+        # The argument to pass to the ax.boxplot is:
+        # if data to plot at each x position is y[x] and to plot at each hue 
+        # position is y[x][hue]
+        # then list to pass to the ax.boxplot is: [[y[x1][hue1],y[x2][hue1],
+        # y[x3][hue1]...],[y[x1][hue2],y[x2][hue2],y[x3][hue2],...]...]
         
         #sort the values is needed if doing hue.
-        sort_indices_in_x = np.argsort(x)
-        x = x[sort_indices_in_x]
-        separateby = separateby[sort_indices_in_x]
-        hue = hue[sort_indices_in_x]
-        colorby = [colorby[i] for i in sort_indices_in_x]
-        y = [y[i] for i in sort_indices_in_x]
-        
+        # sort_indices_in_x = np.argsort(x)
+        # x = x[sort_indices_in_x]
+        # separateby = separateby[sort_indices_in_x]
+        # hue = hue[sort_indices_in_x]
+        # colorby = [colorby[i] for i in sort_indices_in_x]
+        # y = [y[i] for i in sort_indices_in_x]
         
         #first level of to_plot_dictionary is separateby. If there is none,
         #then the key is None.
-        x_pos = len(np.unique(x))
+        unique_x = to_plot_dictionary[list(to_plot_dictionary.keys())[0]].keys()
+        x_pos = len(unique_x)
         x_pos = np.arange(1,x_pos+1)
         
         ######### figkwargs ##############
@@ -1032,12 +1012,25 @@ class SimplePlots:
         cmap=figkwargs.get('cmap','coolwarm')
         cmap_reversed=figkwargs.get('cmap_reversed',False)
         figsize=figkwargs.get('figsize',None)
-        widths = figkwargs.get('widths',0.6)
-        patch_artist=figkwargs.get('patch_artist',True)
+        fontsize=figkwargs.get('fontsize',10)
+        box_plots_kwargs = dict()
+        box_plots_kwargs['sym'] = figkwargs.get('sym','gD')
+        box_plots_kwargs['widths'] = figkwargs.get('widths',0.6)
+        box_plots_kwargs['patch_artist']=figkwargs.get('patch_artist',False)
+        box_plots_kwargs['notch']=figkwargs.get('notch',False)
+        box_plots_kwargs['medianprops'] = figkwargs.get('medianprops',dict(color='grey'))
+        box_plots_kwargs['vert'] = figkwargs.get('vert',True)
+        box_plots_kwargs['whis'] = figkwargs.get('whis',1.5)
+        box_plots_kwargs['bootstrap'] = figkwargs.get('bootstrap',None)
+        box_plots_kwargs['usermedians'] = figkwargs.get('usermedians',None)
+        box_plots_kwargs['conf_intervals'] = figkwargs.get('conf_intervals',None)
+        
+        legend_label = dict()
+        legend_label['loc'] =  figkwargs.get('legend_loc','upper right')
         
         ######### figkwargs:end ##############
         
-        if not all(item is None for item in separateby):
+        if not all(item is None for item in to_plot_dictionary.keys()): # the first level is separateby
             uniq_separateby = list(to_plot_dictionary.keys())
             if len(uniq_separateby)>3:
                 row = int(np.ceil(len(uniq_separateby)/3))
@@ -1045,7 +1038,7 @@ class SimplePlots:
             else:
                 row =1
                 column = len(uniq_separateby)
-            fig,axes = plt.subplots(row,column,sharex=True,sharey=True,figsize=figkwargs['figsize'])
+            fig,axes = plt.subplots(row,column,sharex=True,sharey=True,figsize=figsize)
             if isinstance(axes,plt.Axes):
                 axes = [axes]
             else:
@@ -1060,99 +1053,76 @@ class SimplePlots:
                 fig, ax = plt.subplots(figsize=figsize)
             axes = [ax]
 
-        if not all(item == 0 for item in colorby):
-            pal = sns.color_palette(cmap,len(colorby))
-            if cmap_reversed:
-                pal = pal[::-1]
-            rank = colorby.argsort().argsort()
+        if not all(item is None for item in hue):
+            pal = sns.color_palette(cmap,len(np.unique(hue)))
             my_cmap = ListedColormap(pal)
-            norm = plt.Normalize(colorby.min(),colorby.max())
-            sm = plt.cm.ScalarMappable(cmap=my_cmap,norm=norm)
+            sm = plt.cm.ScalarMappable(cmap=my_cmap)
             sm.set_array([])
-            color = np.array(pal)[rank]
-        else:
-            color = None
+            color = np.array(pal)
         
-        def plot_group_box(y,hue,x,ax,colors=None):
-            y_hue = []
-            unique_hue  = np.unique(hue)
-            temporary_vstack = np.vstack([x,hue])
-            for label_idx,label in enumerate(unique_hue):
-                y_hue.append([y[i] for i in np.where(hue==label)[0]])
-            label_list = x[unique_loc]
-            print(label_list)
+        def plot_group_box(to_plot,ax,color):
+            y_hue = [list(to_plot[i].values()) for i in to_plot.keys()]
+            label_list = list(to_plot[list(to_plot.keys())[0]].keys())
             width = 1/len(label_list)
-            xlocations  = [ x*((1+ len(y_hue))*width) for x in range(len(label_list)) ]
-            symbol = 'r+'
-            ymin = min ([val  for dg in y_hue  for data in dg for val in data ] )
-            ymax = max ([val  for dg in y_hue  for data in dg for val in data ])
-            
-            ax.set_ylim(ymin,ymax)
-            space = len(y_hue)/2
-            offset = len(y_hue)/2
+            box_plots_kwargs['widths'] = width
+            xlocations  = [ x*((1+ len(y_hue))*width) for x in range(len(label_list))]
+            space = len(y_hue)/2                    
+        
             # --- Offset the positions per group:
             group_positions = []
-            for num, dg in enumerate(y_hue):    
+            for num, dg in enumerate(y_hue):
                 _off = (0 - space + (0.5+num))
-                print(_off)
                 group_positions.append([x+_off*(width+0.01) for x in xlocations])
-
-            for dg, pos in zip(y_hue, group_positions):
-                boxes = ax.boxplot(dg, 
-                            sym=symbol,
-                            labels=['']*len(label_list),
-                #            labels=labels_list,
-                            positions=pos, 
-                            widths=width, 
-                            # boxprops=dict(facecolor=c),
-                #             capprops=dict(color=c),
-                #            whiskerprops=dict(color=c),
-                #            flierprops=dict(color=c, markeredgecolor=c),                       
-                            medianprops=dict(color='grey'),
-                #           notch=False,  
-                #           vert=True, 
-                #           whis=1.5,
-                #           bootstrap=None, 
-                #           usermedians=None, 
-                #           conf_intervals=None,
-                            patch_artist=True,
+            
+            hue_legends = []
+            for dg, pos,c in zip(y_hue, group_positions,color):
+                boxes = ax.boxplot(dg,
+                            labels=label_list,
+                            positions=pos,
+                            boxprops=dict(color=c),
+                            capprops=dict(color=c),
+                            whiskerprops=dict(color=c),
+                            flierprops=dict(color=c, markeredgecolor=c),                       
+                            **box_plots_kwargs
                             )
-            ax.set_xticks( xlocations )
-            ax.set_xticklabels( label_list, rotation=0 )            
+                hue_legends.append(boxes['boxes'][0])
+            ax.legend(hue_legends,[i for i in to_plot.keys()],**legend_label)
+            ax.set_xticks(xlocations)
+            ax.set_xticklabels(label_list,rotation=0)
         
         for idx, ax in enumerate(axes):
             if not all(item is None for item in separateby):
+                for separate_key in to_plot_dictionary.keys():    
+                    if not all(item is None for item in hue):
+                        unique_hues = np.unique(hue)
+                        to_plot = {h: {x_:to_plot_dictionary[separate_key][x_][h]['y'] for x_ in unique_x } for h in unique_hues}
+                        plot_group_box(to_plot,ax,color)
+                    else:
+                        to_plot = {k1:v1[None]['y'] for k1,v1 in to_plot_dictionary[separate_key].items()}
+                        ax.boxplot(to_plot.values(),
+                                    positions=x_pos,labels=to_plot.keys(),**box_plots_kwargs)
+                if idx%3==0:
+                    ax.set_ylabel(ylabel,fontsize=fontsize)
+
                 
-                try:
-                    current_separateby_index = np.where(separateby==uniq_separateby[idx])
-                except IndexError:
-                    #this is because you have empty subplots
-                    continue
-                temp_x = x[current_separateby_index]
-                sort_indices_in_x = temp_x.argsort()
-                print(type(temp_x),temp_x.shape,'hello')
-                if not all(item is None for item in hue):
-                    unique_hue = np.unique(hue)
-                    for label_idx, label in enumerate(unique_hue):
-                        print('hihiii')
-                else:
-                    print('hehehehe')
             else:
                 if not all(item is None for item in hue):
-                    return hue,x,y
-                    plot_group_box(y,hue,x,ax)
-                        
-                        
-                        
-                    
-                    
-                    
+                    unique_hues = np.unique(hue)
+                    to_plot = {h: {x_:to_plot_dictionary[None][x_][h]['y'] for x_ in unique_x } for h in unique_hues}
+                    plot_group_box(to_plot,ax,color)
+
                 else:
-                    ax.boxplot(y,positions=x_pos,labels=x,
-                               widths=widths,
-                               patch_artist=patch_artist)
-                    
-                    
+                    to_plot = {k1:v1[None]['y'] for k1,v1 in to_plot_dictionary[None].items()}
+                    ax.boxplot(to_plot.values(),
+                                positions=x_pos,labels=to_plot.keys(),**box_plots_kwargs)
+                
+                ax.set_ylabel(ylabel,fontsize=fontsize)
+                ax.set_title(title)
+        if len(axes)>1:
+            fig.suptitle(
+                title,
+                size='xx-large')
+        
             
         
         
