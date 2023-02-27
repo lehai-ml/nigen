@@ -869,20 +869,25 @@ class SimplePlots:
                      scaling=scaling,
                      edgecolors=figkwargs['edgecolors']):
             #calculating the mass univariate
-            model, _ = stats.MassUnivariate.mass_univariate(cont_independentVar_cols=x,
-                                                                       dependentVar_cols=y,
-                                                                       scaling=scaling)  # will perform standaridzation inside the function
-            if scaling == 'both':
-                x = StandardScaler().fit_transform(x)
-                y = StandardScaler().fit_transform(y)
-            elif scaling == 'x':
-                x = StandardScaler().fit_transform(x)
-            elif scaling == 'y':
-                y = StandardScaler().fit_transform(y)
+            model, _ = stats.MassUnivariate.mass_univariate(
+                cont_independentVar_cols=x,
+                dependentVar_cols=y,
+                scaling=scaling
+                )  # will perform standaridzation inside the function
+            # if scaling == 'both':
+            #     x = StandardScaler().fit_transform(x)
+            #     y = StandardScaler().fit_transform(y)
+            # elif scaling == 'x':
+            #     x = StandardScaler().fit_transform(x)
+            # elif scaling == 'y':
+            #     y = StandardScaler().fit_transform(y)
             # get the beta and calculate p-value for the regression model
-            y_pred = model.predict(sm.add_constant(x))
+            y_pred = model.predict({f'Cont_{i}':x[:,i] for i in range(x.shape[1])}) # most likely will be Cont_0. Because there is only one variable of x anyway. y_pred is returned as pd.Series
+            #y_pred = model.predict(sm.add_constant(x),transform=False) #transform is used with ols but not OLS.
             predictions = model.get_prediction()
             df_predictions = predictions.summary_frame()
+            if all(item.dtype == 'O' for item in x):
+                raise TypeError('The items passed to X are categorical, i.e. strings. you must instead create dummy variable and pass that instead. Maybe use pd.get_dummy')
             sorted_x = np.argsort(x[:, 0])
             coefs = model.params.values[1]
             p_value = model.pvalues.values[1]
@@ -920,6 +925,7 @@ class SimplePlots:
             fig, ax = plt.subplots()
         if hue is None:
             plotting(x, y,color=color,annotate=annotate,scaling=scaling)
+            
         else:
             data = data.reset_index(drop=True)
             unique_hues = data[hue].unique()

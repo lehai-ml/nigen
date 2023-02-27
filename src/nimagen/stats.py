@@ -16,6 +16,8 @@ from sklearn.preprocessing import StandardScaler, LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 
+from patsy import PatsyError
+
 import tqdm
 from statsmodels.multivariate.cancorr import CanCorr
 
@@ -234,11 +236,13 @@ class MassUnivariate:
         if isinstance(df,pd.DataFrame):
             df_dictionary = df.to_dict(orient='list')
         
-        cat_independentVar,cont_independentVar,dependentVar = MassUnivariate.prepare_data(df=df,
-                                                                                          cat_independentVar_cols=cat_independentVar_cols,
-                                                                                          cont_independentVar_cols=cont_independentVar_cols,
-                                                                                          dependentVar_cols=dependentVar_cols,
-                                                                                          col_to_drop = col_to_drop)
+        cat_independentVar,cont_independentVar,dependentVar = MassUnivariate.prepare_data(
+            df=df,
+            cat_independentVar_cols=cat_independentVar_cols,
+            cont_independentVar_cols=cont_independentVar_cols,
+            dependentVar_cols=dependentVar_cols,
+            col_to_drop = col_to_drop
+            )
         
         
         if isinstance(formula,str) and isinstance(df,pd.DataFrame):
@@ -268,7 +272,10 @@ class MassUnivariate:
                 temp_dataset.update(cont_independentVar)
                 temp_dataset.update({feature:dependentVar[feature]})
                 
-                last_model = sfm.ols(formula_temp,data=temp_dataset).fit()
+                try:
+                    last_model = sfm.ols(formula_temp,data=temp_dataset).fit()
+                except PatsyError:
+                    raise TypeError('You may be fitting standardize to a non-numeric value, change your scaling parameter')
                 lm_summary[feature].extend(MassUnivariate.print_lm_summary(last_model,return_ancova=return_ancova,**kwargs))
 
         lm_summary = pd.DataFrame(lm_summary).T
@@ -379,10 +386,12 @@ class MassUnivariate:
             if X.ndim == 1:
                 X = X.reshape(-1,1)
             for idx in range(X.shape[1]):
-                model,_ = MassUnivariate.mass_univariate(df = df,
-                                                         cat_independentVar_cols=cat_independentVar_cols,
-                                                         cont_independentVar_cols=cont_independentVar_cols,
-                                                         dependentVar_cols=X[:,idx],**massunivariatekwargs)
+                model,_ = MassUnivariate.mass_univariate(
+                    df = df,
+                    cat_independentVar_cols=cat_independentVar_cols,
+                    cont_independentVar_cols=cont_independentVar_cols,
+                    dependentVar_cols=X[:,idx],**massunivariatekwargs
+                    )
                 if isinstance(dependentVar_cols, pd.DataFrame):
                     adjusted_X[dependentVar_cols.columns.tolist()[idx]] = model.resid.values
                 else:
@@ -393,10 +402,13 @@ class MassUnivariate:
             if isinstance(dependentVar_cols,str):
                 dependentVar_cols = [dependentVar_cols]
             for idx,dependentVar_col in enumerate(dependentVar_cols):
-                model,_ = MassUnivariate.mass_univariate(df = df,
-                                                         cat_independentVar_cols=cat_independentVar_cols,
-                                                         cont_independentVar_cols=cont_independentVar_cols,
-                                                         dependentVar_cols=dependentVar_col,**massunivariatekwargs)
+                model,_ = MassUnivariate.mass_univariate(
+                    df = df,
+                    cat_independentVar_cols=cat_independentVar_cols,
+                    cont_independentVar_cols=cont_independentVar_cols,
+                    dependentVar_cols=dependentVar_col,
+                    **massunivariatekwargs
+                    )
                 if isinstance(dependentVar_col,str):
                     adjusted_X[dependentVar_col] = model.resid.values
                 else:
