@@ -797,7 +797,7 @@ class SimplePlots:
         color,scalar_mappable = SimplePlots.get_color_pallete(colorby,
                                                                figkwargs['cmap'],
                                                                figkwargs['cmap_reversed'])
-        
+
         if adjust_covar is not None:
             if 'x' in adjust_covar:
                 cat_independentVar_cols = [independentVar for independentVar in adjust_covar['x'] if data[independentVar].dtype == 'object']
@@ -874,13 +874,6 @@ class SimplePlots:
                 dependentVar_cols=y,
                 scaling=scaling
                 )  # will perform standaridzation inside the function
-            # if scaling == 'both':
-            #     x = StandardScaler().fit_transform(x)
-            #     y = StandardScaler().fit_transform(y)
-            # elif scaling == 'x':
-            #     x = StandardScaler().fit_transform(x)
-            # elif scaling == 'y':
-            #     y = StandardScaler().fit_transform(y)
             # get the beta and calculate p-value for the regression model
             y_pred = model.predict({f'Cont_{i}':x[:,i] for i in range(x.shape[1])}) # most likely will be Cont_0. Because there is only one variable of x anyway. y_pred is returned as pd.Series
             #y_pred = model.predict(sm.add_constant(x),transform=False) #transform is used with ols but not OLS.
@@ -891,7 +884,13 @@ class SimplePlots:
             sorted_x = np.argsort(x[:, 0])
             coefs = model.params.values[1]
             p_value = model.pvalues.values[1]
-            
+            if scaling == 'both':
+                x = StandardScaler().fit_transform(x)
+                y = StandardScaler().fit_transform(y)
+            elif scaling == 'x':
+                x = StandardScaler().fit_transform(x)
+            elif scaling == 'y':
+                y = StandardScaler().fit_transform(y)
             if unique_label is None:
                 #calculate the correlation label
                 corr_label = r'$r$=%0.03f, pval = %0.03f' % (coefs, p_value)
@@ -936,6 +935,8 @@ class SimplePlots:
             if combined:
                 plotting(x,y,combined=True,scaling=scaling)
     
+        xlabel=f'standardize({xlabel})' if scaling=='both' or scaling=='x' else xlabel
+        ylabel=f'standardize({ylabel})' if scaling=='both' or scaling=='y' else ylabel
         ax.set_xlabel(xlabel,fontsize=figkwargs['fontsize'])
         ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
         
