@@ -171,24 +171,27 @@ class MassUnivariate:
         Returns:
             formula: str formula in R style
         """
-        if isinstance(formula,str):
-            if '~' in formula:
-                return formula
-            right_side = formula
-        else:
-            def weird_symbols(key_list):
+        def weird_symbols(key_list):
+            if key_list is not None:
                 if not isinstance(key_list,str):
                     return [f"Q('{k}')" if (' ' in k) else k for k in key_list]
                 return f"Q('{key_list}')" if (' ' in key_list) else key_list
-            categorical_keys = weird_symbols(categorical_keys)
-            continuous_keys = weird_symbols(continuous_keys)
-            dependent_key = weird_symbols(dependent_key)
+            
+        if isinstance(formula,str):
+            if '~' in formula:
+                return formula
+            else:
+                right_side = formula
+                
+        else:
+            categorical_keys = [] if weird_symbols(categorical_keys) is None else weird_symbols(categorical_keys)
+            continuous_keys = [] if weird_symbols(continuous_keys) is None else weird_symbols(continuous_keys)
             right_side = '+'.join([f'C({k})' for k in categorical_keys] + 
                                   [f'standardize({k})' if scaling=='x' or scaling=='both' else k for k in continuous_keys])
             if not fit_intercept:
                 right_side = right_side + ' -1'
                 
-        left_side = f'standardize({dependent_key})' if scaling=='y' or scaling=='both' else dependent_key 
+        left_side = f'standardize({weird_symbols(dependent_key)})' if scaling=='y' or scaling=='both' else weird_symbols(dependent_key) 
         return '~'.join([left_side,right_side])
         
     @staticmethod
@@ -228,8 +231,8 @@ class MassUnivariate:
             Union[sm.regression.linear_model.RegressionResultsWrapper, pd.DataFrame]: [the statsmodel model and dataframe of the model summary, where cols are independent variables and const]
         """
         lm_summary = defaultdict(list)
-        
-        df_dictionary = df.to_dict(orient='list')
+        if isinstance(df,pd.DataFrame):
+            df_dictionary = df.to_dict(orient='list')
         
         cat_independentVar,cont_independentVar,dependentVar = MassUnivariate.prepare_data(df=df,
                                                                                           cat_independentVar_cols=cat_independentVar_cols,
