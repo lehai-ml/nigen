@@ -991,10 +991,12 @@ class SimplePlots:
                     cat_independentVar_cols = None
                 if len(cont_independentVar_cols) == 0:
                     cont_independentVar_cols = None
-                adj_x = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
-                                                                                       cat_independentVar_cols=cat_independentVar_cols,
-                                                                                       cont_independentVar_cols=cont_independentVar_cols,
-                                                                                       dependentVar_cols=x)
+                adj_x = stats.MassUnivariate.adjust_covariates_with_lin_reg(
+                    df=data,
+                    cat_independentVar_cols=cat_independentVar_cols,
+                    cont_independentVar_cols=cont_independentVar_cols,
+                    dependentVar_cols=x
+                    )
                 x = adj_x.values.reshape(-1)
                 if xlabel is not None:
                     xlabel = f'Adj. {xlabel}'
@@ -1005,10 +1007,12 @@ class SimplePlots:
                     cat_independentVar_cols = None
                 if len(cont_independentVar_cols) == 0:
                     cont_independentVar_cols = None
-                adj_y = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
-                                                                                       cat_independentVar_cols=cat_independentVar_cols,
-                                                                                       cont_independentVar_cols=cont_independentVar_cols,
-                                                                                       dependentVar_cols=y)
+                adj_y = stats.MassUnivariate.adjust_covariates_with_lin_reg(
+                    df=data,
+                    cat_independentVar_cols=cat_independentVar_cols,
+                    cont_independentVar_cols=cont_independentVar_cols,
+                    dependentVar_cols=y
+                    )
                 y = adj_y.values.reshape(-1)
                 if ylabel is not None:
                     if isinstance(ylabel,list):
