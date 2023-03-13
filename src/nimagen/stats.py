@@ -176,7 +176,7 @@ class MassUnivariate:
         def weird_symbols(key_list):
             if key_list is not None:
                 if not isinstance(key_list,str):
-                    return [f"Q('{k}')" if (' ' in k) else k for k in key_list]
+                    return [f"Q('{k}')" if (' ' in k) or ('-' in k) or ('_' in k) else k for k in key_list]
                 return f"Q('{key_list}')" if (' ' in key_list) else key_list
             
         if isinstance(formula,str):
@@ -427,6 +427,7 @@ class MassUnivariate:
             cls,
             df: pd.DataFrame,
             thresholds: List[str],
+            threshold_prefix:str = 'PRS',
             cat_independentVar_cols: Optional[Union[List[str],
                                             List[np.ndarray]]] = None,
             cont_independentVar_cols: Optional[Union[List[str],
@@ -453,17 +454,18 @@ class MassUnivariate:
             cont_independentVar_cols = []
         for threshold in tqdm.tqdm(thresholds):
             try:
-                _, temp_model_summary = cls.mass_univariate(
+                temp_model, temp_model_summary = cls.mass_univariate(
                     df,
                     cat_independentVar_cols=cat_independentVar_cols,
                     cont_independentVar_cols=cont_independentVar_cols + [threshold],
                     dependentVar_cols=dependentVar_cols,**kwargs)
                 temp_model_summary.reset_index(drop=False, inplace=True)
+                threshold_name = [i for i in temp_model.params.index if threshold in i][0]
                 temp_model_summary.rename(
                     {
                         'index': 'Connection',
-                        threshold + '_coef': 'PRS_coef',
-                        threshold + '_pval': 'PRS_pval'
+                        threshold_name + '_coef': f'{threshold_prefix}_coef',
+                        threshold_name + '_pval': f'{threshold_prefix}_pval'
                     },
                     axis=1,
                     inplace=True)
@@ -471,20 +473,21 @@ class MassUnivariate:
                 if isinstance(cont_independentVar_cols, np.ndarray):
                     threshold_array = df[threshold].values.reshape(-1,1)
                     updated_cont_independentVar_cols = np.hstack([cont_independentVar_cols,threshold_array])
-                    _, temp_model_summary = cls.mass_univariate(
+                    temp_model, temp_model_summary = cls.mass_univariate(
                         df,
                         cat_independentVar_cols=cat_independentVar_cols,
                         cont_independentVar_cols=updated_cont_independentVar_cols,
                         dependentVar_cols=dependentVar_cols,**kwargs)
                     threshold_idx = updated_cont_independentVar_cols.shape[1]-1
                 temp_model_summary.reset_index(drop=False, inplace=True)
+                threshold_name = [i for i in temp_model.params.index if threshold in i][0]
                 temp_model_summary.rename(
                     {
                         'index': 'Connection',
-                        threshold + '_coef': 'PRS_coef',
-                        threshold + '_pval': 'PRS_pval',
-                        f'Cont_{threshold_idx}_coef':'PRS_coef',
-                        f'Cont_{threshold_idx}_pval':'PRS_pval',
+                        threshold_name + '_coef':f'{threshold_prefix}_coef',
+                        threshold_name + '_pval': f'{threshold_prefix}_pval',
+                        f'Cont_{threshold_idx}_coef':f'{threshold_prefix}_coef',
+                        f'Cont_{threshold_idx}_pval':f'{threshold_prefix}_pval',
                     },
                     axis=1,
                     inplace=True)
@@ -549,10 +552,14 @@ class MassUnivariate:
         result_dict['beta_coefs'] = full_model.params.tolist()
         result_dict['pvalues'] = full_model.pvalues.tolist()
         for variable in full_model.params.index.tolist():
-            result_dict['Rsquared'].append(cls.calculate_R_squared_explained(df,col_to_drop=variable,
-                                                                             cat_independentVar_cols=cat_independentVar_cols,
-                                                                             cont_independentVar_cols=cont_independentVar_cols,
-                                                                             dependentVar_cols = dependentVar_cols))
+            result_dict['Rsquared'].append(
+                cls.calculate_R_squared_explained(
+                df,
+                col_to_drop=variable,
+                cat_independentVar_cols=cat_independentVar_cols,
+                cont_independentVar_cols=cont_independentVar_cols,
+                dependentVar_cols = dependentVar_cols)
+                )
         result_df = pd.DataFrame(result_dict,index = full_model.params.index)
         return result_df
     
