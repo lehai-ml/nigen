@@ -15,6 +15,7 @@ Main functions of ```nimagen``` is to
 Example of a plot created with ```nimagen```
 
 ![Example map of brain regions with accompanying legend](images/brainmaps.png)
+
 Figure 1. Example map of brain regions with accompanying legend
 
 ![Example regression multiple-plot](images/example_plot.png)
