@@ -14,7 +14,10 @@ Main functions of ```nimagen``` is to
 
 Example of a plot created with ```nimagen```
 
-![Example map of brain regions with accompanying legend](images/brainmaps.tiff)
+[Example map of brain regions with accompanying legend](images/brainmaps.png)
+
+[Example regression multiple-plot](images/example_plot.png)
+
 
 Version update
 - 0.0.2 - 20 March 2023 - Revamped stats module to use patsy format instead.
