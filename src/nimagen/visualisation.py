@@ -386,7 +386,6 @@ class SimplePlots:
         colorby,colorbar_label,_ = SimplePlots.return_array(colorby,data=data)
         separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str')
         hue,legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str')
-        
         if (hue is not None) and (colorby is not None):
             #if both hue and colorby is present, show only hue
             colorby = None
@@ -1073,10 +1072,10 @@ class SimplePlots:
         box_plots_kwargs['bootstrap'] = figkwargs.get('bootstrap',None)
         box_plots_kwargs['usermedians'] = figkwargs.get('usermedians',None)
         box_plots_kwargs['conf_intervals'] = figkwargs.get('conf_intervals',None)
-        
         legend_label = dict()
         legend_label['loc'] =  figkwargs.get('legend_loc','upper right')
-        
+        rotation_x = figkwargs.get('rotation_x',0)
+
         ######### figkwargs:end ##############
         
         if not all(item is None for item in to_plot_dictionary.keys()): # the first level is separateby
@@ -1137,7 +1136,7 @@ class SimplePlots:
                 hue_legends.append(boxes['boxes'][0])
             ax.legend(hue_legends,[i for i in to_plot.keys()],**legend_label)
             ax.set_xticks(xlocations)
-            ax.set_xticklabels(label_list,rotation=0)
+            ax.set_xticklabels(label_list,rotation=rotation_x)
         
         for idx, ax in enumerate(axes):
             if not all(item is None for item in separateby):
