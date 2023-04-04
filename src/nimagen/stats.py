@@ -449,10 +449,11 @@ class MassUnivariate:
         new_df : TYPE
             DESCRIPTION.
         """
+        disable_tqdm = kwargs.get('disable_tqdm',False)
         new_df = pd.DataFrame()
         if cont_independentVar_cols is None:
             cont_independentVar_cols = []
-        for threshold in tqdm.tqdm(thresholds):
+        for threshold in tqdm.tqdm(thresholds,disable=disable_tqdm):
             try:
                 temp_model, temp_model_summary = cls.mass_univariate(
                     df,
@@ -569,7 +570,7 @@ class MassUnivariate:
                                             cont_independentVar_cols: Optional[List[str]] = None,
                                             check_cols:Optional[List[str]]=None,
                                             check_plan:Optional[str]=None,
-                                            dependentVar_cols: Optional[List[str]] = None):
+                                            dependentVar_cols: Optional[List[str]] = None,**kwargs):
         """[Perform univariate test on all combinations of predictors]
 
         Args:
@@ -581,7 +582,7 @@ class MassUnivariate:
             [type]: [description]
         """
         all_models = defaultdict(list)
-
+        disable_tqdm = kwargs.get('disable_tqdm',False)
         def print_model_results(model: sm.regression.linear_model.RegressionResultsWrapper,
                                 model_name: str,
                                 dictionary: dict = all_models) -> None:
@@ -616,7 +617,7 @@ class MassUnivariate:
         
         if check_plan=='sequential':
             k_combo = (check_cols[0:n] for n in range(1,len(check_cols)+1))
-            for idx,model_combo in tqdm.tqdm(enumerate(k_combo)):
+            for idx,model_combo in tqdm.tqdm(enumerate(k_combo),disable=disable_tqdm):
                 cat_independentVar_cols_temp = [i for i in cat_independentVar_cols if i not in check_cols]
                 cont_independentVar_cols_temp = [i for i in cont_independentVar_cols if i not in check_cols]
                 for _, covar in enumerate(model_combo):
@@ -639,7 +640,7 @@ class MassUnivariate:
                 print_model_results(model_temp, model_name_temp)
         # for k in range(1,len(total_predictors)+1):
         else:
-            for k in tqdm.tqdm(range(1, len(check_cols)+1)):
+            for k in tqdm.tqdm(range(1, len(check_cols)+1),disable=disable_tqdm):
                 k_combo = combinations(check_cols, k)
                 for idx, model_combo in enumerate(k_combo):
                     cat_independentVar_cols_temp = []
@@ -719,7 +720,8 @@ class MassUnivariate:
                             thresholds:List[str]=None,
                             cat_independentVar_cols:List[str]=None,
                             cont_independentVar_cols:List[str]=None,
-                            dependentVar_cols:List[str]=None)->pd.DataFrame:
+                            dependentVar_cols:List[str]=None,
+                            **kwargs)->pd.DataFrame:
         """
         
 
@@ -732,8 +734,10 @@ class MassUnivariate:
             The summary table containing R, Beta value, P-value for each dependent variable at each PRS threshold.
 
         """
+        disable_tqdm = kwargs.get('disable_tqdm',False)
+
         Result_dict=defaultdict(dict)
-        for dependent_variable in tqdm.tqdm(dependentVar_cols):
+        for dependent_variable in tqdm.tqdm(dependentVar_cols,disable=disable_tqdm):
             Result_dict[dependent_variable] = defaultdict(dict)
             for threshold in thresholds:
                 Result_dict[dependent_variable][threshold] = defaultdict(dict)
@@ -874,6 +878,64 @@ class Stability_tests:
                     bins -= 1
 
         return train_test
+    
+    @staticmethod
+    def split_group(df:Union[pd.DataFrame, np.ndarray],
+                    stratify_by_args:Union[str,np.array]=None,
+                    n=2,
+                    fraction:Union[List[float],float]=None,
+                    bins:int=4):
+        """Splitting dataframe or array into groups
+
+        Args:
+            df (Union[pd.DataFrame, np.ndarray]): DataFrame or Array
+            stratify_by_args (Union[str,np.array], optional): list of string or columns names that need to be stratified. Defaults to None.
+            n (int, optional): number of groups. Defaults to 2.
+            bins (int, optional): bins to stratify the continuous variables. Defaults to 4.
+
+        Returns:
+            List[pd.DataFrame]: list of dataframe corresponding for each group
+        """
+        if isinstance(df,np.ndarray):
+            temp_df = pd.DataFrame(df)
+        elif isinstance(df,pd.DataFrame):
+            temp_df = df.copy()
+        
+        
+        stratification_list = []
+        if stratify_by_args is not None:
+            for idx, stratification in enumerate(stratify_by_args):
+                if isinstance(stratification, str):
+                    strat = df.loc[:, stratification].values
+                    if isinstance(strat[0], float):
+                        strat = pd.cut(strat, bins=bins, labels=False)
+                elif isinstance(stratification, np.ndarray):
+                    strat = stratification
+                    if isinstance(stratification[0], float):
+                        strat = pd.cut(strat, bins=bins, labels=False)
+                stratification_list.append(strat)
+                stratify_by = [''.join(map(lambda x: str(x), i))
+                                for i in zip(*stratification_list)]
+                
+            temp_df['stratify_by'] = stratify_by
+            unique_stratified_group = np.unique(stratify_by)
+            if isinstance(fraction,float):
+                return df.iloc[temp_df.groupby('stratify_by',group_keys=False).apply(lambda x: x.sample(frac=fraction)).index]
+            all_group = pd.concat([
+                temp_df[temp_df['stratify_by']==unique_group].apply(
+                    lambda x: np.random.choice([
+                        i for i in range(n)],1)[0],axis=1) for unique_group in unique_stratified_group
+                ])
+        else:
+            if isinstance(fraction,float):
+                return df.iloc[temp_df.sample(frac=fraction).index]
+            all_group = temp_df.apply(
+                lambda x: np.random.choice([i for i in range(n)],1)[0],axis=1)
+            
+        return [temp_df.iloc[all_group[all_group==i].index] for i in range(n)]
+        
+        
+    
     
     # @staticmethod
     # def generate_stratified_fold(df: Union[pd.DataFrame, np.ndarray] = None,
