@@ -7,6 +7,7 @@ from collections import defaultdict
 from itertools import combinations
 import statsmodels.api as sm
 import statsmodels.formula.api as sfm
+from statsmodels.stats.multitest import fdrcorrection
 from scipy.stats import ttest_ind, zscore, f
 import pandas as pd
 import numpy as np
@@ -765,49 +766,69 @@ class MassUnivariate:
                        orient='index')
         
         return summary_table
+
+class MultipleCorrection:
+    @staticmethod
+    def fdr(df:pd.DataFrame=None,
+            p_val:Union[np.ndarray,str]=None,
+            alpha:float=0.05):
+        if isinstance(df,pd.DataFrame):
+            if not isinstance(p_val,str):
+                return TypeError('Must give the column name if providing dataframe')
+            p_val = df[p_val].values
+        elif isinstance(p_val,np.ndarray):
+            if p_val.ndim != 1:
+                p_val = p_val.reshape(-1)
+        survived,adjusted_pval = fdrcorrection(p_val)
+        if isinstance(df,pd.DataFrame):
+            return df[survived]
+        else:
+            return survived,adjusted_pval
+            
+            
+
+    @staticmethod
+    def matSpDLite(correlation_matrix:np.ndarray,alpha:str = 0.05):
+        """
+        Adapted from Nyholt DR R script.
+        Please cite
+        Nyholt DR (2004) A simple correction for multiple testing for SNPs in linkage disequilibrium with each other. Am J Hum Genet 74(4):765-769.
+        and 
+        http://gump.qimr.edu.au/general/daleN/matSpDlite/
+        and
+        Li and Ji 2005. 
         
+        Parameters
+        ----------
+        correlation_matrix : np.ndarray
+            The correlation matrix. It must be symmetric.
+        alpha : str, optional
+            DESCRIPTION. The default is 0.05.
 
-def matSpDLite(correlation_matrix:np.ndarray,alpha:str = 0.05):
-    """
-    Adapted from Nyholt DR R script.
-    Please cite
-    Nyholt DR (2004) A simple correction for multiple testing for SNPs in linkage disequilibrium with each other. Am J Hum Genet 74(4):765-769.
-    and 
-    http://gump.qimr.edu.au/general/daleN/matSpDlite/
-    and
-    Li and Ji 2005. 
-    
-    Parameters
-    ----------
-    correlation_matrix : np.ndarray
-        The correlation matrix. It must be symmetric.
-    alpha : str, optional
-        DESCRIPTION. The default is 0.05.
-
-    """
-    evals,_ = np.linalg.eigh(correlation_matrix.T)
-    evals = np.sort(evals)[::-1]
-    
-    oldV = np.var(evals,ddof=1)
-    M = len(evals)
-    L = M-1
-    Meffold = (L*(1- oldV/M)) + 1
-    
-    print(f'Effective Number of Independent Variables [Veff] is {Meffold}')
-    newevals = np.where(evals<0,0,evals) # negative eigenvalues are set to 0
-    
-    IntLinewevals = np.where(newevals>=1,1,0) #the integral part "represents identical tests that should be counted as one in Meff"
-    NonIntLinewevals = newevals - np.floor(newevals) # the non integral part should represent the partially correlated test that should be counted as a fractional number between 0 and 1
-    MeffLi = np.sum(IntLinewevals + NonIntLinewevals)
-    
-    print(f'Effective Number of Independent Variables [VeffLi] (Using equation 5 of Li and Ji 2005) is {np.round(MeffLi)}')
-    
-    if MeffLi < Meffold:
-        adjusted_p_val = alpha/MeffLi
-    else:
-        adjusted_p_val = alpha/Meffold
-    print(f'The adjusted multiple testing correction p-val is alpha/lower(Meff) = {adjusted_p_val}')
-    return MeffLi
+        """
+        evals,_ = np.linalg.eigh(correlation_matrix.T)
+        evals = np.sort(evals)[::-1]
+        
+        oldV = np.var(evals,ddof=1)
+        M = len(evals)
+        L = M-1
+        Meffold = (L*(1- oldV/M)) + 1
+        
+        print(f'Effective Number of Independent Variables [Veff] is {Meffold}')
+        newevals = np.where(evals<0,0,evals) # negative eigenvalues are set to 0
+        
+        IntLinewevals = np.where(newevals>=1,1,0) #the integral part "represents identical tests that should be counted as one in Meff"
+        NonIntLinewevals = newevals - np.floor(newevals) # the non integral part should represent the partially correlated test that should be counted as a fractional number between 0 and 1
+        MeffLi = np.sum(IntLinewevals + NonIntLinewevals)
+        
+        print(f'Effective Number of Independent Variables [VeffLi] (Using equation 5 of Li and Ji 2005) is {np.round(MeffLi)}')
+        
+        if MeffLi < Meffold:
+            adjusted_p_val = alpha/MeffLi
+        else:
+            adjusted_p_val = alpha/Meffold
+        print(f'The adjusted multiple testing correction p-val is alpha/lower(Meff) = {adjusted_p_val}')
+        return MeffLi
 
 
 # def save_dict_with_pickle(dictionary: Optional[dict],

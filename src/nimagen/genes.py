@@ -13,8 +13,10 @@ Following steps are available:
 """
 from typing import List, DefaultDict, Union, Optional
 import pandas as pd
+import numpy as np
 import bed_reader
 import statsmodels.api as sm
+from scipy.stats import hypergeom
 from collections import defaultdict
 import tqdm
 
@@ -188,11 +190,14 @@ class SNPsFunctionalAnalysis:
             dictionary['P'] = p_value
             dictionary['BETA'] = beta
         y = pheno_covar_file[[phenotype]].copy()
-        x = pheno_covar_file[covariate].copy()
+        x = pheno_covar_file[covariate].copy()     
         snp_association = defaultdict(dict)
         for snp in tqdm.tqdm(bed_file_sid):
             x['SNP'] = bed_file_SNPs[[snp]].values
-            perform_univariate_test(x, y, snp_association[snp])
+            try:
+                perform_univariate_test(x, y, snp_association[snp])
+            except ValueError:
+                print('check your categorical data, make sure it is converted to dummy variables')
 
         snp_association = pd.DataFrame(snp_association).T
         snp_association['A1'] = bed_file_A1
@@ -282,3 +287,109 @@ class SNPsFunctionalAnalysis:
 
         return genes_ID, snp_ID
 
+class GeneSetEnrichment:
+    @staticmethod
+    def read_gmt(file:str)->list:
+        """open and read gmt file (pathway files)
+            The pathway entry must have the following format:
+            pathway name/url_link/list of genes found in the pathway.
+            The entries are tab-separated
+        Args:
+            file (str): the pathway file of interest
+
+        Returns:
+            list: list of list
+        """
+        genesets = []
+        with open(file, 'r') as fin:
+            for l in fin:
+                genesets.append(l.strip().split("\t"))
+        return genesets
+    
+    @staticmethod
+    def read_gene_list(file:str)->list:
+        """read gene list. This file must contains only genes in the same corresponding format as in the pathway file. Each gene must be on separate line.
+
+        Args:
+            file (str): gene list file
+
+        Returns:
+            list: list of genes
+        """
+        gene_list=[]
+        with open(file,'r') as fin:
+            for l in fin:
+                gene_list.append(l.strip())
+        return gene_list
+    
+    @staticmethod
+    def hypergeometric_test(pathways:list,
+                            background_genes:np.array,
+                            genes:np.array):
+        """
+        hypergeometric test as done in FUMA-webapp.
+        original source code: https://github.com/vufuma/FUMA-webapp/blob/master/scripts/GeneSet.py
+        See overepresentation analysis (ora).
+        """
+        
+        def intersection(a1:np.array,a2:np.array)->np.array:
+            """Return indices of values in a1 that are found in a2
+            """
+            return np.where(np.in1d(a1, a2))[0]
+        
+        g = np.asarray(pathways[2:])
+        g = g[intersection(g,background_genes)]
+        n = len(g)
+        gin = genes[intersection(genes,g)]
+        x = len(gin)
+        if x>1:
+            p = hypergeom.sf(x-1,len(background_genes),n,len(genes))
+        else:
+            p = 1
+        return n,x,p,":".join(gin.astype(str))
+    
+    @staticmethod
+    def ora(pathways:Union[str,list],
+            background_genes:Union[str,list,np.array],
+            genes:Union[str,list,np.array],
+            multiple_comparison:str='bonferroni',**kwargs)->pd.DataFrame:
+        """Perform overrepresentation analysis
+
+        Args:
+            pathways (Union[str,list]): file name or list of list of pathways
+            background_genes (Union[str,list,np.array]): file name or list of background genes
+            genes (Union[str,list,np.array]): filename or list of genes of interest
+            multiple_comparison (str, optional): the multiple comparison method. Defaults to 'bonferroni'. bonferroni = 0.05/len(pathways)
+
+        Returns:
+            pd.DataFrame
+        """
+        if isinstance(background_genes,str):
+            background_genes = GeneSetEnrichment.read_gene_list(background_genes)
+        if not isinstance(background_genes,np.ndarray):
+            background_genes = np.array(background_genes)
+        if isinstance(genes,str):
+            genes = GeneSetEnrichment.read_gene_list(genes)
+        if not isinstance(genes,np.ndarray):
+            genes = np.array(genes)
+        if isinstance(pathways,str):
+            pathways = GeneSetEnrichment.read_gmt(pathways)
+        
+        output = pd.DataFrame([])
+
+        disable_tqdm = kwargs.get('disable_tqdm',False)
+        for l in tqdm.tqdm(pathways,disable=disable_tqdm):
+            if len(l)<3:
+                continue
+            n,x,p,g_overlapped = GeneSetEnrichment.hypergeometric_test(l,background_genes,genes)
+            temp = pd.DataFrame({'GeneSet':[l[0]],
+                                    'N_genes':[n],
+                                    'N_overlap':[x],
+                                    'p':[p],
+                                    'genes':[g_overlapped]})
+            output = pd.concat([output,temp],axis=0)
+        output = output.reset_index(drop=True)
+        if multiple_comparison == 'bonferroni':
+            output['adjP'] = output['p'].apply(lambda x: x*len(pathways) if x<1 else x)
+        return output[output['adjP']>0.05]
+        

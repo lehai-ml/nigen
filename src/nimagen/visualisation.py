@@ -434,10 +434,22 @@ class SimplePlots:
                 all_bars_vals = SimplePlots.sort_array(all_bars_vals,
                                                         specific_order=order)
             else:
-                all_bars_vals = SimplePlots.sort_array(all_bars_vals,
-                                                       order=order,
-                                                       ascending=figkwargs['order_reversed'])
-        
+                try:
+                    all_bars_vals = SimplePlots.sort_array(all_bars_vals,
+                                                        order=order,
+                                                        ascending=figkwargs['order_reversed'])
+                except TypeError:
+                #this happens when the continuous values has equal values, e.g, 0.000 in multiple places, the code will then try to sort the rows by the first axis. If that first axis is None, then it will throw bad error.
+                    try:
+                        assert all(v is None for v in all_bars_vals['separateby']) #make sure that all of the values in all_bar_vals separateby is None.
+                    except AssertionError:
+                        raise TypeError('The separateby value is not None, there is something wrong with sorting process')
+                    all_bars_vals['separateby'] = 0
+                    all_bars_vals = SimplePlots.sort_array(all_bars_vals,
+                                                        order=order,
+                                                        ascending=figkwargs['order_reversed'])
+                    all_bars_vals['separateby'] = None
+                    
         separateby = all_bars_vals['separateby']
         if all(item is None for item in separateby):
             separateby = None
