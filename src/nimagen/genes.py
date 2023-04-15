@@ -391,5 +391,5 @@ class GeneSetEnrichment:
         output = output.reset_index(drop=True)
         if multiple_comparison == 'bonferroni':
             output['adjP'] = output['p'].apply(lambda x: x*len(pathways) if x<1 else x)
-        return output[output['adjP']>0.05]
+        return output[output['adjP']<0.05]
         
