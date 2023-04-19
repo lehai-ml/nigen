@@ -771,7 +771,8 @@ class MultipleCorrection:
     @staticmethod
     def fdr(df:pd.DataFrame=None,
             p_val:Union[np.ndarray,str]=None,
-            alpha:float=0.05):
+            alpha:float=0.05,
+            return_adj:bool=True):
         if isinstance(df,pd.DataFrame):
             if not isinstance(p_val,str):
                 return TypeError('Must give the column name if providing dataframe')
@@ -781,6 +782,8 @@ class MultipleCorrection:
                 p_val = p_val.reshape(-1)
         survived,adjusted_pval = fdrcorrection(p_val)
         if isinstance(df,pd.DataFrame):
+            if return_adj:
+                df['adjP'] = adjusted_pval
             return df[survived]
         else:
             return survived,adjusted_pval
