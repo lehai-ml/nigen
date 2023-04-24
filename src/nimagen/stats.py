@@ -866,7 +866,7 @@ class Stability_tests:
             df (Union[pd.DataFrame, np.ndarray], optional): [the data/ dataframe to be split]. Defaults to None.
             bins (int, optional): [the bins used to separate the continuous data,
                                         if it is too high, then due to small dataset, there might be error due to not enough data in each class]. Defaults to 4.
-            This works by concatenate multiple stratification criteria together, and then attempt train test split. This is done at each level of stratification. If the stratificatio is not successful, we reduce the bins number, and try again.
+            This works by concatenate multiple stratification criteria together, and then attempt train test split. This is done at each level of stratification. If the stratification is not successful, we reduce the bins number, and try again.
             This is done in succession, so depending on what you want to stratify by, you put it earlier in the list. so GA_vol, PMA_vol will stratify first by GA, and then PMA.
         Returns:
             tuple : train and test set.

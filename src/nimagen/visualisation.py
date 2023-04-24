@@ -17,7 +17,8 @@ import copy
 from matplotlib.collections import LineCollection
 import matplotlib.patches as mpatches
 import matplotlib as mpl
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, to_rgb, rgb2hex, CSS4_COLORS
+
 from collections import defaultdict
 from itertools import product, chain
 
@@ -1326,9 +1327,10 @@ class Brainmap:
                          plot_values_threshold:float=None,
                          mask:dict=None,
                          fig:mpl.figure.Figure=None,
-                         axes:Union[np.ndarray,List]=None,
+                         axes:Union[np.ndarray,List,plt.Axes]=None,
                          colorbar:bool=False,
                          label_legend:dict=None,
+                         label_legend_colours:dict=None,
                          legends:bool=True,
                          atlas_file:Union[str,nib.nifti1.Nifti1Image]=None,
                          cmap:str='Spectral',plot_orientation:bool=True,**figkwargs):
@@ -1369,6 +1371,10 @@ class Brainmap:
             Each color patch in the legend will correspond to the color in the plot
             Must provide a dictionary, where the key is interger denoting the label.
             And value is the string abbreviation. The default is None.
+        label_legend_colours: dict, optional
+            If providing label_legend, and if you are performing multiple subplots. It may be good idea, to use this to have consistent colours.
+            Must provide a dictionary, where the key is interger denoting the label, and value is the colour.
+            
         legend: bool, optional
             Whether to plot the brain legend.
             The default is True
@@ -1429,6 +1435,18 @@ class Brainmap:
         original_axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
         original_coronal_atlas = brain_map.atlas[:,atlas_slice_dict['coronal'],:].copy()
         original_sagittal_atlas = brain_map.atlas[atlas_slice_dict['sagittal'],:,:].copy()
+        
+        # the following regions need to be hidden (but outline will still be shown)
+        if regions_to_hide is not None:
+            for region in regions_to_hide:
+                brain_map.atlas[brain_map.atlas == region] = np.nan
+                if 'outline_regions_to_hide' not in figkwargs:
+                    figkwargs['outline_regions_to_hide'] = True
+                if not figkwargs['outline_regions_to_hide']:
+                    original_axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
+                    original_coronal_atlas = brain_map.atlas[:,atlas_slice_dict['coronal'],:].copy()
+                    original_sagittal_atlas = brain_map.atlas[atlas_slice_dict['sagittal'],:,:].copy()
+            
 
         if label_legend is not None:# if legend dictionary is provided
             unique_regions = np.unique(brain_map.atlas[~np.isnan(brain_map.atlas)]) #not labelling the np.nan values
@@ -1446,24 +1464,48 @@ class Brainmap:
                         #if more than one key show the same value, then change it to the same key.
                         brain_map.atlas[brain_map.atlas==region] = label[0]
             
+            ####setting vmin vmax - this is needed to get common colours across multiple plots
+            # the colours are not in sequential order. For example, number 5 and 79 denotes the same structures.
+            
+            #####ploting label legends####
+            def find_closest_name(col):
+                #taken from here
+                #https://stackoverflow.com/questions/71756150/getting-the-names-of-colors-from-matplotlib-colormap-object
+                #This function is used to get the name from to_rgb function
+                rv, gv, bv = to_rgb(col)
+                min_colors = {}
+                for col in CSS4_COLORS:
+                    rc, gc, bc = to_rgb(col)
+                    min_colors[(rc - rv) ** 2 + (gc - gv) ** 2 + (bc - bv) ** 2] = col
+                closest = min(min_colors.keys())
+                return min_colors[closest], np.sqrt(closest)
+            
+            if label_legend_colours is None:
+
+                label_val = list(set(label_legend.values()))
+                n_colors = len(label_val)
+                vals = np.linspace(0, 1, n_colors)
+                label_legend_colours_inversed = {k:find_closest_name(brain_map.cmap(val))[0] for k,val in zip(label_val,vals)} # {'temporal':[0,0,0],'parietal':[0.1,0.2,0.3],...}
+                label_legend_colours = {k:label_legend_colours_inversed[v] for k,v in label_legend.items()} #{5:[0.1,0.2,0.3],6:[1,2,3],...}
+                # brain_map.cmap = LinearSegmentedColormap.from_list('from_list',
+                #                                  [(val, col) for val, col in zip(vals, label_legend_colours.values())])
+
+            if not isinstance(label_legend_colours,dict):
+                raise TypeError('label_legend_colours need to be dictionary')
+            
+            if all(isinstance(v,str) for v in label_legend_colours.values()):
+                label_legend_colours = {k:np.array(to_rgb(v)) for k,v in label_legend_colours.items()}
+            
+            if not all(isinstance(v,np.ndarray) for v in label_legend_colours.values()):
+                raise TypeError('the colours must be defined as either string or np.ndarray. Use matplotlib.colors.to_rgb')
+                
+            
             if 'outline_label_legends' not in figkwargs: # whether to outline only the keys in the legend
                 figkwargs['outline_label_legends'] = True
             if figkwargs['outline_label_legends']:
                 original_axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
                 original_coronal_atlas = brain_map.atlas[:,atlas_slice_dict['coronal'],:].copy()
                 original_sagittal_atlas = brain_map.atlas[atlas_slice_dict['sagittal'],:,:].copy()
-        
-        # the following regions need to be hide (but outline will still be shown)
-        if regions_to_hide is not None:
-            for region in regions_to_hide:
-                brain_map.atlas[brain_map.atlas == region] = np.nan
-                if 'outline_regions_to_hide' not in figkwargs:
-                    figkwargs['outline_regions_to_hide'] = True
-                if not figkwargs['outline_regions_to_hide']:
-                    original_axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
-                    original_coronal_atlas = brain_map.atlas[:,atlas_slice_dict['coronal'],:].copy()
-                    original_sagittal_atlas = brain_map.atlas[atlas_slice_dict['sagittal'],:,:].copy()
-            
                 
                 
         if plot_values is not None:
@@ -1505,7 +1547,8 @@ class Brainmap:
                     raise ValueError('number of map_view does not match number of axes provided')
             if (fig is None) and (plot_values is not None) and (colorbar is not None):
                 raise AttributeError('Need fig element to plot the colorbar')
-        
+        elif isinstance(axes,plt.Axes) and len(map_view)==1 and map_view != 'all':
+            axes=[axes]
         #
         axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
         coronal_atlas = brain_map.atlas[:,atlas_slice_dict['coronal'],:].copy()
@@ -1527,12 +1570,25 @@ class Brainmap:
                 map_view_dict[view]['original_atlas'] = original_sagittal_atlas
         
         #plot the images
+        
         vmin = np.min([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].min() for view in map_view_dict.keys()])
         vmax = np.max([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].max() for view in map_view_dict.keys()])
-
+        
         for view,ax in map_view_dict.items():
-            map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(map_view_dict[view]['atlas']),vmin=vmin,vmax=vmax,cmap=brain_map.cmap)
-    
+            
+            if isinstance(label_legend_colours,dict):
+                #if legend with colour is provided. We need to map the colours to the value in the atlas.
+                value_to_colour = np.ndarray(shape=(map_view_dict[view]['atlas'].shape[0],map_view_dict[view]['atlas'].shape[1],3))
+                for i in range(0, map_view_dict[view]['atlas'].shape[0]):
+                    for j in range(0, map_view_dict[view]['atlas'].shape[1]):
+                        try:
+                            value_to_colour[i][j] = label_legend_colours[map_view_dict[view]['atlas'][i][j]] 
+                        except KeyError:
+                            value_to_colour[i][j] = 1
+                map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(value_to_colour))
+            else:
+                map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(map_view_dict[view]['atlas']),vmin=vmin,vmax=vmax,cmap=brain_map.cmap)
+        
             #plot the outlines
             temp_original_atlas = map_view_dict[view]['original_atlas']
             for unique_label in np.unique(temp_original_atlas[~np.isnan(temp_original_atlas)]):
@@ -1568,14 +1624,10 @@ class Brainmap:
         if label_legend is not None:
             #to plot legends?
             if legends:
-                #get the unique labels
-                values = np.unique(np.concatenate([map_view_dict[view]['atlas'].ravel() for view in map_view]))
-                values = values[~np.isnan(values)] #not labelling the np.nan values
-                # get the colors of the values, according to the 
-                # colormap used by imshow
-                temp_im = map_view_dict[list(map_view_dict)[0]]['im']
-                colors = [temp_im.cmap(temp_im.norm(value)) for value in values]
-                patches = [mpatches.Patch(color=colors[idx], label=label_legend[int(i)]) for idx, i in enumerate(values) if i in label_legend]
+                
+                to_legend = {v1:find_closest_name(v2)[0] for v1,v2 in zip(label_legend.values(),label_legend_colours.values())}
+                
+                patches = [mpatches.Patch(color=v, label=k) for k, v in to_legend.items()]
                 plt.legend(handles=patches, 
                            bbox_to_anchor=figkwargs['label_legend_bbox_to_anchor'], 
                            loc=figkwargs['label_legend_loc'],
