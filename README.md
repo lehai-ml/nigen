@@ -26,11 +26,3 @@ Figure 1. Example map of brain regions with accompanying legend
 
 ![Example regression multiple-plot](images/example_plot.png)
 Figure 2. Example regression multiple-plot
-
-Version update
-- 0.0.2 - 20 March 2023 - Revamped stats module to use patsy format instead.
-- 0.0.1 - First version
-
-Things to improve
-- genes.py - fix the bed_reader.to_bed, currently, the val and properties dict do not match up.
-- genes.py - update the calculate snp associations, so that it can take in categorical data without dummy variables.
