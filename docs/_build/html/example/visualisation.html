@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualisation tools &mdash; NIMAGEN 0.0.1 documentation</title>
+      <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Documentation" href="../modules.html" />
+    <link rel="prev" title="NIMAGEN: Simple Statistical and Visualisation tool for Neuroimaging Genetics Studies" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="../index.html" class="icon icon-home"> NIMAGEN
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Visualisation tools</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#brain-maps">Brain maps</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#basics-commands">Basics commands</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#additional-options">Additional options</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Commands</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">Documentation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">License and contact</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html#contact">Contact</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">NIMAGEN</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">Visualisation tools</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/example/visualisation.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="visualisation-tools">
+<h1>Visualisation tools<a class="headerlink" href="#visualisation-tools" title="Permalink to this headline"></a></h1>
+<p>The following plots can be created:</p>
+<section id="brain-maps">
+<h2>Brain maps<a class="headerlink" href="#brain-maps" title="Permalink to this headline"></a></h2>
+<section id="basics-commands">
+<span id="initialise-brain-map"></span><h3>Basics commands<a class="headerlink" href="#basics-commands" title="Permalink to this headline"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">visualisation.Brainmap</span></code> function requires <code class="docutils literal notranslate"><span class="pre">nibabel</span></code> to read NifTi files. The Nifti file in question must be a segmentation file, where each value corresponds to a label. One can visualise this file like so:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span><span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nifti&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here is an example output</p>
+<img alt="Full brain plot" src="../_images/brain_plot_full.png" />
+<p>The working of this is simple. First, the nifti file values are read into two identical numpy arrays. From here, one of the numpy array is used to “colour”, and one to plot outlines. So if in your nifti file, value 1 corresponds to hippocampus, then a black outline will trace along the edges of that hippocampus. This outline process is repeated for each structure. The structures are differentiated by having different values in the array. This allows us to do the following things:</p>
+<p><strong>*Hide regions*</strong></p>
+<div class="highlight-python notranslate" id="regions-to-hide"><div class="highlight"><pre><span></span><span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span><span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+                                         <span class="n">regions_to_hide</span><span class="o">=</span><span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">lobe_only</span><span class="o">.</span><span class="n">keys</span><span class="p">()])</span>
+</pre></div>
+</div>
+<p>Here, the values in regions passed to <code class="docutils literal notranslate"><span class="pre">regions_to_hide</span></code> is set to NA. So the function knows not to colour them. You can also hide the outlines of the NA regions by setting <code class="docutils literal notranslate"><span class="pre">outline_regions_to_hide</span></code> to <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
+<img alt="Hide regions plot" src="../_images/brain_plot_hide_regions.png" />
+<p><strong>*Plot values and mask regions based on threshold*</strong></p>
+<p>Suppose you have done some statistics, and now you wnat to colour the regions based on that values. To do this you need to pass in the <code class="docutils literal notranslate"><span class="pre">plot_values</span></code> argument. It is a dictionary, where the dictionary keys are the region interger value, and dictionary values is the plot value. If the key is not present in the <code class="docutils literal notranslate"><span class="pre">plot_values</span></code> dictionary, then the plot value is set to NA, i.e. it is not plotted.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">plot_val</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span><span class="n">p</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">88</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="mi">87</span><span class="p">))}</span>
+<span class="c1"># dictionary, where keys are the segmentation label, and values are the</span>
+<span class="c1"># values to plot</span>
+<span class="n">mask</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span><span class="n">p</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">p</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">88</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">(</span><span class="mi">87</span><span class="p">))}</span>
+<span class="n">fig</span><span class="p">,</span><span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="mi">15</span><span class="p">))</span>
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">plot_values</span><span class="o">=</span><span class="n">plot_val</span><span class="p">,</span><span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
+
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">plot_values</span><span class="o">=</span><span class="n">plot_val</span><span class="p">,</span>
+    <span class="n">plot_values_threshold</span><span class="o">=</span><span class="mf">0.50</span><span class="p">,</span>
+    <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
+
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">plot_values</span><span class="o">=</span><span class="n">plot_val</span><span class="p">,</span>
+    <span class="n">plot_values_threshold</span><span class="o">=</span><span class="mf">0.50</span><span class="p">,</span>
+    <span class="n">mask</span><span class="o">=</span><span class="n">mask</span><span class="p">,</span>
+    <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">colorbar</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span><span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;Greens&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<img alt="../_images/brain_plot_values.png" src="../_images/brain_plot_values.png" />
+<p><em>Plot label legends</em></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">label_legend</span></code> is also a dictionary in the same format as <code class="docutils literal notranslate"><span class="pre">plot_values</span></code>, where the dictionary key is the segmentation label, and the dictionary value is the string label. By default regions that have the same string label, only the boundary of the group is drawn, and the regions that do not have keys in the legend dictionary are not outlined. To turn off this option, set <code class="docutils literal notranslate"><span class="pre">outline_label_legends</span></code> to <code class="docutils literal notranslate"><span class="pre">False</span></code>. By default, the legend will be created based on the unique values in the <code class="docutils literal notranslate"><span class="pre">label_legend</span></code>, where each value will be given a colour. The legend box position and fontsize can be controlled (use at your own perils). Use combinations of <code class="docutils literal notranslate"><span class="pre">regions_to_hide</span></code> and <code class="docutils literal notranslate"><span class="pre">label_legend</span></code> to create different plots.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span><span class="p">,</span><span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="mi">15</span><span class="p">))</span>
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">label_legend</span><span class="o">=</span><span class="n">lobe_only_legend</span><span class="p">,</span>
+    <span class="n">outline_label_legends</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span><span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span><span class="n">label_legend_bbox_to_anchor</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">1.5</span><span class="p">,</span><span class="o">-</span><span class="mf">0.25</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span><span class="n">label_legend_fontsize</span><span class="o">=</span><span class="s1">&#39;xx-large&#39;</span><span class="p">)</span>
+
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">label_legend</span><span class="o">=</span><span class="n">lobe_only_legend</span><span class="p">,</span><span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span><span class="n">legends</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+    <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+    <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+    <span class="n">regions_to_hide</span><span class="o">=</span><span class="n">remove_regions</span><span class="p">,</span>
+    <span class="n">label_legend</span><span class="o">=</span><span class="n">lobe_only_legend</span><span class="p">,</span>
+    <span class="n">outline_label_legends</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">outline_regions_to_hide</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span><span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span><span class="n">legends</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<img alt="../_images/brain_legend.png" src="../_images/brain_legend.png" />
+</section>
+<section id="additional-options">
+<h3>Additional options<a class="headerlink" href="#additional-options" title="Permalink to this headline"></a></h3>
+<p><em>Changing view slice and orientation</em></p>
+<p>You can select multiple views by setting <code class="docutils literal notranslate"><span class="pre">map_view</span></code> option or <code class="docutils literal notranslate"><span class="pre">atlas_slice</span></code>. By default, the function will view the middle slice in all 3 orientations (axial, coronal and sagittal). The slice visualise across any direction can be customised.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The plot can only be plotted if the slice contains non-NA values in the numpy array. For example, even if the axial view has shape 200,274. It may not plot slices from 0 to 20 if the numpy array has only NA values.</p>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">atlas_slices</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span><span class="mi">180</span><span class="p">,</span><span class="mi">9</span><span class="p">)]</span>
+<span class="n">fig</span><span class="p">,</span><span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span><span class="mi">15</span><span class="p">))</span>
+<span class="n">axes</span> <span class="o">=</span> <span class="n">axes</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">ax</span><span class="p">,</span><span class="n">atlas_slice</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span><span class="n">atlas_slices</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">atlas_slice</span> <span class="o">==</span> <span class="mi">115</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+            <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+            <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+            <span class="n">atlas_slice</span> <span class="o">=</span> <span class="n">atlas_slice</span><span class="p">,</span>
+            <span class="n">label_legend</span><span class="o">=</span><span class="n">lobe_only_legend</span><span class="p">,</span>
+            <span class="n">outline_label_legends</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">axes</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span><span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">,</span>
+            <span class="n">legends</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">label_legend_bbox_to_anchor</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="p">,</span><span class="o">-</span><span class="mf">0.25</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span>
+            <span class="n">label_legend_fontsize</span><span class="o">=</span><span class="s1">&#39;xx-large&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">visualisation</span><span class="o">.</span><span class="n">Brainmap</span><span class="o">.</span><span class="n">plot_segmentation</span><span class="p">(</span>
+            <span class="n">atlas_file</span><span class="o">=</span><span class="s1">&#39;/path/to/nii.gz&#39;</span><span class="p">,</span>
+            <span class="n">map_view</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;axial&#39;</span><span class="p">],</span>
+            <span class="n">label_legend</span><span class="o">=</span><span class="n">lobe_only_legend</span><span class="p">,</span>
+            <span class="n">outline_label_legends</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">atlas_slice</span> <span class="o">=</span> <span class="n">atlas_slice</span><span class="p">,</span>
+            <span class="n">axes</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span>
+            <span class="n">legends</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+</pre></div>
+</div>
+<img alt="../_images/brain_legend_full.png" src="../_images/brain_legend_full.png" />
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../index.html" class="btn btn-neutral float-left" title="NIMAGEN: Simple Statistical and Visualisation tool for Neuroimaging Genetics Studies" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../modules.html" class="btn btn-neutral float-right" title="Documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Hai Le.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

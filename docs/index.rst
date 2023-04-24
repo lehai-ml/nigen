@@ -1,20 +1,31 @@
-.. NIMAGEN documentation master file, created by
-   sphinx-quickstart on Tue Jan  3 00:55:23 2023.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+NIMAGEN: Simple Statistical and Visualisation tool for Neuroimaging Genetics Studies
+=====================================================================================
 
-Welcome to NIMAGEN's documentation!
-===================================
+Introduction
+============
+
+NIMAGEN is created to provide simple statistical and visualisation tools for neuroimaging genetics studies. Tools used are primarily built on top of statsmodels, scipy, scikit-learn, matplotlib and many others. Please see the underlying source code for more information and relevant citation if needed. If you have used this package in your paper, please cite the following work:
+
+    Le H, Dimitrakopoulou K, Patel H, Curtis C, Cordero-Grande L, Edwards AD, Hajnal J, Tournier JD, Deprez M, Cullen H. Effect of schizophrenia common variants on infant brain volumes: cross-sectional study in 207 term neonates in developing Human Connectome Project. Transl Psychiatry. 2023 Apr 10;13(1):121. doi: 10.1038/s41398-023-02413-6. PMID: 37037832; PMCID: PMC10085987.
+
+Table Of Content
+^^^^^^^^^^^^^^^^
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Examples
+   
+   example/visualisation
 
-   modules
+.. toctree::
+    :maxdepth: 1
+    :caption: Commands
 
-Indices and tables
-==================
+    modules
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. toctree::
+    :maxdepth: 1 
+    :caption: License and contact
+
+    license
+    

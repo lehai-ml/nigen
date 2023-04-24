@@ -1,5 +1,5 @@
-nimagen
-=======
+Documentation
+==============
 
 .. toctree::
    :maxdepth: 4

@@ -1,0 +1,10 @@
+Command examples
+================
+
+Here is a detailed guide of how to use any of the functions in this work
+
+.. toctree::
+    :maxdepth: 2
+
+    example/visualisation
+    
