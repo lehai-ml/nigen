@@ -1395,6 +1395,7 @@ class Brainmap:
             label_legend_ncol : 6
             label_legend_loc: 'lower left'
             label_legend_fontsize: 'medium' or float
+            label_legend_axis : plt.Axis
         Raises
         ------
         ValueError
@@ -1449,6 +1450,8 @@ class Brainmap:
             
 
         if label_legend is not None:# if legend dictionary is provided
+            if not isinstance(label_legend,dict):
+                raise TypeError('label_legend needs to be a dictionary, where keys are the label, and values are the string values')
             unique_regions = np.unique(brain_map.atlas[~np.isnan(brain_map.atlas)]) #not labelling the np.nan values
             for region in unique_regions:
                 if region not in label_legend:
@@ -1481,7 +1484,6 @@ class Brainmap:
                 return min_colors[closest], np.sqrt(closest)
             
             if label_legend_colours is None:
-
                 label_val = list(set(label_legend.values()))
                 n_colors = len(label_val)
                 vals = np.linspace(0, 1, n_colors)
@@ -1621,6 +1623,8 @@ class Brainmap:
             figkwargs['label_legend_loc'] = 'lower left'
         if 'label_legend_fontsize' not in figkwargs:
             figkwargs['label_legend_fontsize'] = 'medium'
+        if 'label_legend_axis' not in figkwargs:
+            figkwargs['label_legend_axis'] = None
         if label_legend is not None:
             #to plot legends?
             if legends:
@@ -1628,12 +1632,21 @@ class Brainmap:
                 to_legend = {v1:find_closest_name(v2)[0] for v1,v2 in zip(label_legend.values(),label_legend_colours.values())}
                 
                 patches = [mpatches.Patch(color=v, label=k) for k, v in to_legend.items()]
-                plt.legend(handles=patches, 
-                           bbox_to_anchor=figkwargs['label_legend_bbox_to_anchor'], 
-                           loc=figkwargs['label_legend_loc'],
-                           ncol=figkwargs['label_legend_ncol'],
-                           fontsize = figkwargs['label_legend_fontsize'],
-                           frameon=False)
+                if isinstance(figkwargs['label_legend_axis'],plt.Axes):
+                    figkwargs['label_legend_axis'].legend(
+                        handles=patches, 
+                        bbox_to_anchor=figkwargs['label_legend_bbox_to_anchor'], 
+                        loc=figkwargs['label_legend_loc'],
+                        ncol=figkwargs['label_legend_ncol'],
+                        fontsize = figkwargs['label_legend_fontsize'],
+                        frameon=False)
+                else:
+                    plt.legend(handles=patches, 
+                            bbox_to_anchor=figkwargs['label_legend_bbox_to_anchor'], 
+                            loc=figkwargs['label_legend_loc'],
+                            ncol=figkwargs['label_legend_ncol'],
+                            fontsize = figkwargs['label_legend_fontsize'],
+                            frameon=False)
 
         for view in map_view:
             sns.despine(bottom=True,left=True,right=True)
