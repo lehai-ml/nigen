@@ -21,7 +21,7 @@ Here is an example output
 
 The working of this is simple. First, the nifti file values are read into two identical numpy arrays. From here, one of the numpy array is used to "colour", and one to plot outlines. So if in your nifti file, value 1 corresponds to hippocampus, then a black outline will trace along the edges of that hippocampus. This outline process is repeated for each structure. The structures are differentiated by having different values in the array. This allows us to do the following things:
 
-***Hide regions***
+*Hide regions*
 
 .. _regions_to_hide:
 
@@ -35,7 +35,7 @@ Here, the values in regions passed to ``regions_to_hide`` is set to NA. So the f
 .. image:: images/brain_plot_hide_regions.png
     :alt: Hide regions plot
 
-***Plot values and mask regions based on threshold***
+*Plot values and mask regions based on threshold*
 
 Suppose you have done some statistics, and now you wnat to colour the regions based on that values. To do this you need to pass in the ``plot_values`` argument. It is a dictionary, where the dictionary keys are the region interger value, and dictionary values is the plot value. If the key is not present in the ``plot_values`` dictionary, then the plot value is set to NA, i.e. it is not plotted.
 
