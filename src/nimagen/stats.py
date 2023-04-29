@@ -178,7 +178,7 @@ class MassUnivariate:
             if key_list is not None:
                 if not isinstance(key_list,str):
                     return [f"Q('{k}')" if (' ' in k) or ('-' in k) or ('_' in k) else k for k in key_list]
-                return f"Q('{key_list}')" if (' ' in key_list) else key_list
+                return f"Q('{key_list}')" if (' ' in key_list) or ('-' in key_list) or ('_' in key_list) else key_list
             
         if isinstance(formula,str):
             if '~' in formula:
@@ -736,8 +736,9 @@ class MassUnivariate:
 
         """
         disable_tqdm = kwargs.get('disable_tqdm',False)
-
+        scaling=kwargs.get('scaling','x')
         Result_dict=defaultdict(dict)
+                
         for dependent_variable in tqdm.tqdm(dependentVar_cols,disable=disable_tqdm):
             Result_dict[dependent_variable] = defaultdict(dict)
             for threshold in thresholds:
@@ -747,10 +748,22 @@ class MassUnivariate:
                     df=df,
                     cat_independentVar_cols=cat_independentVar_cols,
                     cont_independentVar_cols=cont_independentVar_cols + [threshold],
-                    dependentVar_cols=[dependent_variable]) # calculate a full model
-                Result_dict[dependent_variable][threshold]['Beta'] = temp_model.params[1:].to_dict()
-                Result_dict[dependent_variable][threshold]['P_val'] = temp_model.pvalues[1:].to_dict()
-                for col_to_drop in cont_independentVar_cols + cat_independentVar_cols + [threshold]:
+                    dependentVar_cols=[dependent_variable],scaling=scaling) # calculate a full model
+                
+                independentVar = cont_independentVar_cols + cat_independentVar_cols + [threshold]
+                                
+                if scaling=='x' or 'both':
+                    params_val = {k:v for n,v in temp_model.params[1:].to_dict().items() 
+                     for k in independentVar if f'standardize({k})' in n or f'C({k})' in n or f"standardize(Q('{k}'))" in n}
+                    pval_val = {k:v for n,v in temp_model.pvalues[1:].to_dict().items() 
+                     for k in independentVar if f'standardize({k})' in n or f'C({k})' in n or f"standardize(Q('{k}'))" in n}
+                else:
+                    params_val = temp_model.params[1:].to_dict()
+                    pval_val = temp_model.pvalues[1:].to_dict()
+                
+                Result_dict[dependent_variable][threshold]['Beta'] = params_val
+                Result_dict[dependent_variable][threshold]['P_val'] = pval_val
+                for col_to_drop in independentVar:
                     Result_dict[dependent_variable][threshold]['R2'][
                         col_to_drop] = cls.calculate_R_squared_explained(
                             df=df,
@@ -758,7 +771,7 @@ class MassUnivariate:
                             cat_independentVar_cols=cat_independentVar_cols,
                             cont_independentVar_cols=cont_independentVar_cols+[threshold],
                             dependentVar_cols=[dependent_variable])
-        
+                        
         summary_table = pd.DataFrame.from_dict({(i,j,k): Result_dict[i][j][k] 
                                                 for i in Result_dict.keys() 
                                                 for j in Result_dict[i].keys() 
