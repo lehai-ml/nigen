@@ -142,7 +142,7 @@ You can select multiple views by setting ``map_view`` option or ``atlas_slice``.
 *Overlaying second atlas*
 You can do this if you pass the same axes argument to the next ``Brainmap.plot_segmentation`` using another ``atlas_file``.
 
-.. tips::
+.. note::
     You can change the transparency or colour of the outline of the first plot to make it less visible by defining ``outline_colour`` and ``outline_alpha`` arguments.
 
 .. code-block:: python
@@ -171,7 +171,7 @@ You can do this if you pass the same axes argument to the next ``Brainmap.plot_s
 
 .. image:: images/overlaying.png
 
-.. tips::
+.. note::
     In case that your label legend is too big, and plt.tight_layout does not work properly (e.g, when you save figure, your figure is cut off). You can do the following. Define a series of smaller subplots. Group the subplots as shown in the code above. And add the label legend onto its own separate axis. Finally, you can change the ``figsize`` to get your desired plot.
 
 
