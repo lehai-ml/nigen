@@ -146,8 +146,8 @@ You can do this if you pass the same axes argument to the next ``Brainmap.plot_s
 .. note::
     You can change the transparency or colour of the outline of the first plot to make it less visible by defining ``outline_colour`` and ``outline_alpha`` arguments.
 
-
 .. code-block:: python
+
     fig = plt.figure(figsize=(20,10))
     gs = fig.add_gridspec(3,3)
     axes1 = fig.add_subplot(gs[0:2, 0])
