@@ -136,10 +136,43 @@ You can select multiple views by setting ``map_view`` option or ``atlas_slice``.
 
     plt.tight_layout()
 
-
 .. image:: images/brain_legend_full.png
 
 
+*Overlaying second atlas*
+You can do this if you pass the same axes argument to the next ``Brainmap.plot_segmentation`` using another ``atlas_file``.
+
+.. tips::
+    You can change the transparency or colour of the outline of the first plot to make it less visible by defining ``outline_colour`` and ``outline_alpha`` arguments.
+
+.. code-block:: python
+    fig = plt.figure(figsize=(20,10))
+    gs = fig.add_gridspec(3,3)
+    axes1 = fig.add_subplot(gs[0:2, 0])
+    axes2 = fig.add_subplot(gs[0:2, 1])
+    axes3 = fig.add_subplot(gs[0:2, 2])
+    axes4 = fig.add_subplot(gs[2, :])
+    axes4.set_axis_off()
+    _,_ = visualisation.Brainmap.plot_segmentation(
+        atlas_file='../dataset/visualise/wm_parcellation/parcellation_maps_05mm/reference-05mm-dHCP-structure-parcellation.nii.gz',
+        regions_to_hide=[i for i in range(88)],
+        outline_alpha=0.1,
+        outline_colour='green',
+        axes=[axes1,axes2,axes3])
+    _,_ = visualisation.Brainmap.plot_segmentation(
+        atlas_file='../dataset/visualise/wm_parcellation/parcellation_maps_05mm/reference-05mm-WM-parcellation.nii.gz',
+        label_legend=wm_parcellations,
+        cmap='tab20',
+        axes=[axes1,axes2,axes3],
+        legend=True,
+        label_legend_axis=axes4,
+        label_legend_loc='upper center',label_legend_bbox_to_anchor=None,label_legend_ncol=6)
+    plt.tight_layout()
+
+.. image:: images/overlaying.png
+
+.. tips::
+    In case that your label legend is too big, and plt.tight_layout does not work properly (e.g, when you save figure, your figure is cut off). You can do the following. Define a series of smaller subplots. Group the subplots as shown in the code above. And add the label legend onto its own separate axis.
 
 
 

@@ -1150,7 +1150,6 @@ class SimplePlots:
             ax.legend(hue_legends,[i for i in to_plot.keys()],**legend_label)
             ax.set_xticks(xlocations)
             ax.set_xticklabels(label_list,rotation=rotation_x)
-        
         for idx, ax in enumerate(axes):
             if not all(item is None for item in separateby):
                 for separate_key in to_plot_dictionary.keys():    
@@ -1572,9 +1571,11 @@ class Brainmap:
                 map_view_dict[view]['original_atlas'] = original_sagittal_atlas
         
         #plot the images
-        
-        vmin = np.min([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].min() for view in map_view_dict.keys()])
-        vmax = np.max([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].max() for view in map_view_dict.keys()])
+        try:
+            vmin = np.min([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].min() for view in map_view_dict.keys()])
+            vmax = np.max([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].max() for view in map_view_dict.keys()])
+        except ValueError: #in case all zeros I just want to see the outline.
+            vmin,vmax = 0,0
         
         for view,ax in map_view_dict.items():
             
@@ -1598,7 +1599,11 @@ class Brainmap:
                 temp_outline_atlas = temp_original_atlas.copy()
                 temp_outline_atlas[temp_outline_atlas != unique_label] = 0 # if it is not that label, set the pixel to 0
                 temp_outline_atlas[temp_outline_atlas == unique_label] = 1 # basically draw the border where there is pixel value 1
-                temp_line = LineCollection(cls.get_edges(np.rot90(temp_outline_atlas)), lw=1, color='k')
+                if 'outline_colour' not in figkwargs:
+                    figkwargs['outline_colour'] = 'k'
+                if 'outline_alpha' not in figkwargs:
+                    figkwargs['outline_alpha'] = 1
+                temp_line = LineCollection(cls.get_edges(np.rot90(temp_outline_atlas)), lw=1, color=figkwargs['outline_colour'],alpha=figkwargs['outline_alpha'])
                 map_view_dict[view]['ax'].add_collection(temp_line)
         
         if 'cb_orientation' not in figkwargs:
