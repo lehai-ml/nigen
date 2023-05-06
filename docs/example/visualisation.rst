@@ -140,10 +140,12 @@ You can select multiple views by setting ``map_view`` option or ``atlas_slice``.
 
 
 *Overlaying second atlas*
+
 You can do this if you pass the same axes argument to the next ``Brainmap.plot_segmentation`` using another ``atlas_file``.
 
 .. note::
     You can change the transparency or colour of the outline of the first plot to make it less visible by defining ``outline_colour`` and ``outline_alpha`` arguments.
+
 
 .. code-block:: python
     fig = plt.figure(figsize=(20,10))
