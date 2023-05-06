@@ -164,7 +164,7 @@ You can do this if you pass the same axes argument to the next ``Brainmap.plot_s
         label_legend=wm_parcellations,
         cmap='tab20',
         axes=[axes1,axes2,axes3],
-        legend=True,
+        legends=True,
         label_legend_axis=axes4,
         label_legend_loc='upper center',label_legend_bbox_to_anchor=None,label_legend_ncol=6)
     plt.tight_layout()
@@ -172,7 +172,7 @@ You can do this if you pass the same axes argument to the next ``Brainmap.plot_s
 .. image:: images/overlaying.png
 
 .. tips::
-    In case that your label legend is too big, and plt.tight_layout does not work properly (e.g, when you save figure, your figure is cut off). You can do the following. Define a series of smaller subplots. Group the subplots as shown in the code above. And add the label legend onto its own separate axis.
+    In case that your label legend is too big, and plt.tight_layout does not work properly (e.g, when you save figure, your figure is cut off). You can do the following. Define a series of smaller subplots. Group the subplots as shown in the code above. And add the label legend onto its own separate axis. Finally, you can change the ``figsize`` to get your desired plot.
 
 
 
