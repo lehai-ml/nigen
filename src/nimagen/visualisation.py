@@ -258,11 +258,11 @@ class SimplePlots:
             if not ascending:
                 new_array = new_array[::-1]
         else:
-            new_idx = []
+            new_array = pd.DataFrame(current_array)
             for key,values in specific_order.items():
-                for value in values:
-                    new_idx.append([idx for idx,i in enumerate(current_array[key]) if i==value])
-            new_array = current_array[[i for sublist in new_idx for i in sublist]]
+                new_array[key] = pd.Categorical(new_array[key],categories=values,ordered=True)
+            new_array = new_array.sort_values(by=['separateby','x','hue'])
+            new_array = new_array.to_records(index=False)
         return new_array
     
     @staticmethod
@@ -428,6 +428,7 @@ class SimplePlots:
                                         ('y',float),
                                         ('colorby',float),
                                         ('y2',float)])
+        
         if order is not None:
             if 'order_reversed' not in figkwargs:
                 figkwargs['order_reversed'] = False
@@ -552,7 +553,14 @@ class SimplePlots:
             color = None
             
         if figkwargs['yscalelog']:
+            bottom = min(y)
+            if bottom < 1:
+                bottom = bottom/10
+            else:
+                bottom = bottom*10
             plt.yscale('log')
+        else:
+            bottom = 0
         
         if hue is not None:
             def plot_group_bar_chart(x_pos,
@@ -564,14 +572,16 @@ class SimplePlots:
                                      ax,
                                      y2=None,
                                      color=None,
-                                     alpha=None):
+                                     alpha=None,
+                                     log=False,
+                                     bottom=0):
                 mean_pos = np.arange(1,len(unique_hue)+1).mean()
                 if len(unique_hue)%2==0:
                     shift = (label_idx+1) - int(np.ceil(mean_pos))
                     ax.bar(x_pos+(shift*barwidth/len(unique_hue)),
                            y,
                            barwidth/len(unique_hue),
-                           color=color,label=label,alpha=alpha)
+                           color=color,label=label,alpha=alpha,log=log,bottom=bottom)
                     if y2 is not None:
                         pass
                 else:
@@ -579,10 +589,10 @@ class SimplePlots:
                     ax.bar(x_pos+(shift*(barwidth/len(unique_hue))),
                            y,
                            (barwidth/len(unique_hue)),
-                           color=color,label=label,alpha=alpha)
+                           color=color,label=label,alpha=alpha,log=log,bottom=bottom)
             
                 return ax
-
+        # return x,y,hue,separateby, uniq_separateby
         for idx, ax in enumerate(axes):
             if separateby is not None:
                 try:
@@ -591,19 +601,19 @@ class SimplePlots:
                     #this is because you have empty subplots
                     continue
                 temp_x = x[current_separateby_index]
-                sort_indices_in_x = temp_x.argsort()
-                temp_x = temp_x[sort_indices_in_x]
+                # sort_indices_in_x = temp_x.argsort()
+                # temp_x = temp_x[sort_indices_in_x]
                 temp_y = y[current_separateby_index]
-                temp_y = temp_y[sort_indices_in_x]
+                # temp_y = temp_y[sort_indices_in_x]
                 temp_x_pos = np.arange(len(np.unique(temp_x)))
                 if hue is not None:
                     temp_hue = hue[current_separateby_index]
-                    temp_hue = temp_hue[sort_indices_in_x]
+                    # temp_hue = temp_hue[sort_indices_in_x]
                 else:
                     temp_hue = None
                 if color is not None:
                     color_separately = color[current_separateby_index]
-                    color_separately = color_separately[sort_indices_in_x]
+                    # color_separately = color_separately[sort_indices_in_x]
 
                 else:
                     color_separately = None
@@ -619,12 +629,15 @@ class SimplePlots:
                                              unique_hue,
                                              ax,
                                              color=color_separately,
-                                             alpha=figkwargs['alpha'])
+                                             alpha=figkwargs['alpha'],
+                                             log=figkwargs['yscalelog'],
+                                             bottom=bottom)
                         if y2 is not None:#plot point plot on the second plot
                             pass
                             
                 else:
-                    ax.bar(temp_x_pos,temp_y,color=color_separately,alpha=figkwargs['alpha'])
+                    ax.bar(temp_x_pos,temp_y,color=color_separately,alpha=figkwargs['alpha'],
+                           log=figkwargs['yscalelog'],bottom=bottom)
                 if figkwargs['plot_label'] is None:
                     figkwargs['plot_label'] = ''
                 ax.set_title(f"{figkwargs['plot_label']}|{uniq_separateby[idx]}",fontsize=figkwargs['plot_title_fontsize'])
@@ -644,18 +657,34 @@ class SimplePlots:
                                              unique_hue,
                                              ax,
                                              color=None,
-                                             alpha=figkwargs['alpha'])
+                                             alpha=figkwargs['alpha'],
+                                             log=figkwargs['yscalelog'],
+                                             bottom=bottom)
                 else:
-                    ax.bar(x_pos,y,color=color,alpha=figkwargs['alpha'])
+                    ax.bar(x_pos,y,color=color,alpha=figkwargs['alpha'],
+                           log=figkwargs['yscalelog'],bottom=bottom)
                     
                 ax.set_xticks(x_pos,get_unique(x))
             
             if figkwargs['hline'] is not None:
-                ax.hlines(figkwargs['hline'],
-                          x_pos[0]-figkwargs['barwidth'],
-                          x_pos[-1]+figkwargs['barwidth'],
-                          label=figkwargs['hline_label'],
-                          color='red')
+                number_of_plots = 1 if separateby is None else len(uniq_separateby)
+                neg_if_more_than_one = 1 if number_of_plots == 1 else -1 ### wonders of matplotlib
+                if not isinstance(figkwargs['hline'],list):
+                    figkwargs['hline'] = [figkwargs['hline']]
+                if figkwargs['hline'] is not None:
+                    if not isinstance(figkwargs['hline_label'],list):
+                        figkwargs['hline_label'] = [figkwargs['hline_label']]
+                else:
+                    if len(figkwargs['hline']) > 1:
+                        raise TypeError('must provide a list of labels for different hlines')
+                    else:
+                        figkwargs['hline_label'] = []
+                for hline,hline_label,hline_colour in zip(figkwargs['hline'],figkwargs['hline_label'],list('bgrcmykw')):        
+                    ax.hlines(hline,
+                            x_pos[0]-number_of_plots*figkwargs['barwidth'],
+                            x_pos[-1]+neg_if_more_than_one*figkwargs['barwidth'],
+                            label=hline_label,
+                            color=hline_colour)
             if 'xlabel_fontdict' not in figkwargs:
                 figkwargs['xlabel_fontdict'] = 10
             
@@ -669,6 +698,9 @@ class SimplePlots:
                 ax.tick_params(axis='x',
                                rotation=figkwargs['rotation_x'],
                                labelsize=figkwargs['xlabel_fontdict'])
+                
+            # if figkwargs['yscalelog']:
+            #     ax.set_yscale('log')
         
         if hue is not None or figkwargs['hline_label'] is not None:
             if row > 1:
@@ -719,6 +751,7 @@ class SimplePlots:
                 ax:Optional[plt.Axes] = None,
                 return_stats:bool=True,
                 adjust_covar:Optional[dict]=None,
+                multi_plot:bool=False,
                 scaling:Optional[str] = 'both', **figkwargs) -> None:
         """
         Fit linear regression, where y~x. calculates the pval and beta coefficient.
@@ -739,6 +772,7 @@ class SimplePlots:
             separate data point by another value in the dataframe (e.g. cohort).
             It will calculate separate beta and p-value.
             The default is None.
+            NOTE: defining hue is the same as defining multiple columns. For example, you want to plot different 
         data : Optional[pd.DataFrame], optional
             if providing string x,y, then data will be the dataframe. The default is None.
         combined : Optional[bool], optional
@@ -758,6 +792,7 @@ class SimplePlots:
             with the name values in the list used as covariates.
         scaling : str, optional
             whether to scale x and y. The default is 'both'.
+        plot_multi_plot=True
         **figkwargs :
             xlabel: str
             ylabel: str
@@ -793,8 +828,7 @@ class SimplePlots:
         if 'edgecolors' not in figkwargs:
             figkwargs['edgecolors'] = 'face'
         
-        
-        x,xlabel,_ = SimplePlots.return_array(x,
+        x,xlabel,row_names = SimplePlots.return_array(x,
                                                data,
                                                variable_label=figkwargs['xlabel'])
         y,ylabel,column_names = SimplePlots.return_array(y,
@@ -809,42 +843,42 @@ class SimplePlots:
         color,scalar_mappable = SimplePlots.get_color_pallete(colorby,
                                                                figkwargs['cmap'],
                                                                figkwargs['cmap_reversed'])
-
+        
         if adjust_covar is not None:
-            if 'x' in adjust_covar:
-                cat_independentVar_cols = [independentVar for independentVar in adjust_covar['x'] if data[independentVar].dtype == 'object']
-                cont_independentVar_cols = [independentVar for independentVar in adjust_covar['x'] if data[independentVar].dtype != 'object']
-                if len(cat_independentVar_cols) == 0:
-                    cat_independentVar_cols = None
-                if len(cont_independentVar_cols) == 0:
-                    cont_independentVar_cols = None
-                adj_x = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
-                                                                                       cat_independentVar_cols=cat_independentVar_cols,
-                                                                                       cont_independentVar_cols=cont_independentVar_cols,
-                                                                                       dependentVar_cols=x)
-                x = adj_x.values
-                if xlabel is not None:
-                    xlabel = f'Adj. {xlabel}'
-            if 'y' in adjust_covar:
-                cat_independentVar_cols = [independentVar for independentVar in adjust_covar['y'] if data[independentVar].dtype == 'object']
-                cont_independentVar_cols = [independentVar for independentVar in adjust_covar['y'] if data[independentVar].dtype != 'object']
-                if len(cat_independentVar_cols) == 0:
-                    cat_independentVar_cols = None
-                if len(cont_independentVar_cols) == 0:
-                    cont_independentVar_cols = None
-                adj_y = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
-                                                                                       cat_independentVar_cols=cat_independentVar_cols,
-                                                                                       cont_independentVar_cols=cont_independentVar_cols,
-                                                                                       dependentVar_cols=y)
-                y = adj_y.values
-                if ylabel is not None:
-                    if isinstance(ylabel,list):
-                        ylabel = [f'Adj. {i}' for i in ylabel]
-                    elif isinstance(ylabel,str):
-                        ylabel = f'Adj. {ylabel}'
-                        
+            for key,covariates in adjust_covar.items():
+                    cat_independentVar_cols = [independentVar for independentVar in covariates if data[independentVar].dtype == 'object']
+                    cont_independentVar_cols = [independentVar for independentVar in covariates if data[independentVar].dtype != 'object']
+                    if len(cat_independentVar_cols) == 0:
+                        cat_independentVar_cols = None
+                    if len(cont_independentVar_cols) == 0:
+                        cont_independentVar_cols = None
+                    if key == 'x':
+                        adj_x = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
+                                                                                            cat_independentVar_cols=cat_independentVar_cols,
+                                                                                            cont_independentVar_cols=cont_independentVar_cols,
+                                                                                            dependentVar_cols=x)
+                        x = adj_x.values
+                        if xlabel is not None:
+                            if isinstance(xlabel,list):
+                                xlabel=[f'Adj. {i}' for i in xlabel]
+                            elif isinstance(xlabel,str):
+                                xlabel = f'Adj. {xlabel}'
+                    elif key== 'y':
+                        adj_y = stats.MassUnivariate.adjust_covariates_with_lin_reg(df=data,
+                                                                                            cat_independentVar_cols=cat_independentVar_cols,
+                                                                                            cont_independentVar_cols=cont_independentVar_cols,
+                                                                                            dependentVar_cols=y)
+                        y = adj_y.values
+                        if ylabel is not None:
+                            if isinstance(ylabel,list):
+                                ylabel = [f'Adj. {i}' for i in ylabel]
+                            elif isinstance(ylabel,str):
+                                ylabel = f'Adj. {ylabel}'
+                
+        
         if x.ndim == 1:
             x = x.reshape(-1, 1)
+        
 
         if y.ndim > 1 and y.shape[1] > 1:#if y is defined as list, then hue is automatically applied
             if not isinstance(column_names,list):
@@ -1387,6 +1421,7 @@ class Brainmap:
             cmap_reversed = if you want to revese the cmap default False
             cb_orientation = {'horizontal','vertical'} if you want your change your colorbar orientation. Default horizontal next to the last axes.
             cb_title = str. name of the colorbar
+            cb_vmin,cb_vmax = define the colorscale of the colorbar
             figsize = Default (20,10)
             outline_label_legends: bool. Default True. The outline is updated if the the same legend is found in two regions.
             outline_regions_to_hide: bool. Default True. The outline is not updated after using regions_to_hide. 
@@ -1571,11 +1606,17 @@ class Brainmap:
                 map_view_dict[view]['original_atlas'] = original_sagittal_atlas
         
         #plot the images
-        try:
-            vmin = np.min([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].min() for view in map_view_dict.keys()])
-            vmax = np.max([map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].max() for view in map_view_dict.keys()])
-        except ValueError: #in case all zeros I just want to see the outline.
-            vmin,vmax = 0,0
+        if 'cb_vmin' not in figkwargs and 'cb_vmax' not in figkwargs:
+            vmin,vmax = [],[] #needed to define the colorbar
+            for view in map_view_dict.keys():
+                try:
+                    vmin.append(map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].min())
+                    vmax.append(map_view_dict[view]['atlas'][~np.isnan(map_view_dict[view]['atlas'])].max())
+                except ValueError:
+                    vmin.append(np.nan)
+                    vmax.append(np.nan)
+            figkwargs['cb_vmin'] = None if np.isnan(np.min(vmin)) else np.min(vmin)
+            figkwargs['cb_vmax'] = None if np.isnan(np.max(vmax)) else np.max(vmax)
         
         for view,ax in map_view_dict.items():
             
@@ -1590,7 +1631,7 @@ class Brainmap:
                             value_to_colour[i][j] = 1
                 map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(value_to_colour))
             else:
-                map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(map_view_dict[view]['atlas']),vmin=vmin,vmax=vmax,cmap=brain_map.cmap)
+                map_view_dict[view]['im'] = map_view_dict[view]['ax'].imshow(np.rot90(map_view_dict[view]['atlas']),vmin=figkwargs['cb_vmin'],vmax=figkwargs['cb_vmax'],cmap=brain_map.cmap)
         
             #plot the outlines
             temp_original_atlas = map_view_dict[view]['original_atlas']
@@ -1609,7 +1650,8 @@ class Brainmap:
         if 'cb_orientation' not in figkwargs:
             figkwargs['cb_orientation'] = 'vertical'
         #add the colorbar?
-        if colorbar: # the colorbar is added to the last im
+        
+        if colorbar and figkwargs['cb_vmin'] is not None: # the colorbar is added to the last im
             if plot_values is None:
                 raise ValueError('need plot value to have colorbar')
             cb = fig.colorbar(map_view_dict[list(map_view_dict)[-1]]['im'],ax = map_view_dict[list(map_view_dict)[-1]]['ax'], orientation = figkwargs['cb_orientation'])
