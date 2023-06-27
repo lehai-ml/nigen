@@ -988,15 +988,20 @@ class SimplePlots:
             if plot_type == 'grid': # x vs. y
                 fig,axes = plt.subplots(len(column_names),len(row_names),figsize=figkwargs['figsize'],sharex=True,sharey=True)
                 axes = axes.flatten()
-                for (row,col),ax in zip(product(row_names,column_names),axes): 
+                for idx,((col,row),ax) in enumerate(zip(product(column_names,row_names),axes)):
                     temp_data = data[(data['X_label']==row) & (data['Y_label']==col)]
                     temp_x = np.array(temp_data['x']).reshape(-1,1)
                     temp_y = np.array(temp_data['y']).reshape(-1,1)
                     plotting(temp_x,temp_y,scaling=scaling,ax=ax)
                     temp_xlabel = f'standardize({row})' if scaling=='both' or scaling=='x' else row
                     temp_ylabel = f'standardize({col})' if scaling=='both' or scaling=='x' else col
-                    ax.set_xlabel(temp_xlabel,fontsize=figkwargs['fontsize'])
-                    ax.set_ylabel(temp_ylabel,fontsize=figkwargs['fontsize'])
+                
+                    if idx%len(row_names)==0: #set ylabel
+                        ax.set_ylabel(temp_ylabel,fontsize=figkwargs['fontsize'])    
+                    if idx>=(len(column_names)*len(row_names))/len(column_names):
+                        ax.set_xlabel(temp_xlabel,fontsize=figkwargs['fontsize'])
+                            
+
                     ax.legend(loc='lower right')
                 figkwargs['legend'] = False
                 set_label = False
@@ -1030,8 +1035,9 @@ class SimplePlots:
         if set_label:
             xlabel=f'standardize({xlabel})' if scaling=='both' or scaling=='x' else xlabel
             ylabel=f'standardize({ylabel})' if scaling=='both' or scaling=='y' else ylabel
+            if ylabel != 'standardize(None)':
+                ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
             ax.set_xlabel(xlabel,fontsize=figkwargs['fontsize'])
-            ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
             
         if figkwargs['colorbar_label'] is not None:
             if color is None:
