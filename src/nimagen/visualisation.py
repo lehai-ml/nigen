@@ -998,7 +998,7 @@ class SimplePlots:
                 
                     if idx%len(row_names)==0: #set ylabel
                         ax.set_ylabel(temp_ylabel,fontsize=figkwargs['fontsize'])    
-                    if idx>=(len(column_names)*len(row_names))/len(column_names):
+                    if idx>=(len(row_names)*(len(column_names)-1)):
                         ax.set_xlabel(temp_xlabel,fontsize=figkwargs['fontsize'])
                             
 
