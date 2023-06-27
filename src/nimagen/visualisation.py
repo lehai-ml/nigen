@@ -742,7 +742,7 @@ class SimplePlots:
     def Scatter(x: Union[np.ndarray, pd.DataFrame, pd.Series, str,list],
                 y: Union[np.ndarray, pd.DataFrame, pd.Series, str,list],
                 colorby:Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
-                hue: Union[np.ndarray,pd.DataFrame,pd.Series,list,str] = None,
+                hue:str = None,
                 data: Optional[pd.DataFrame] = None,
                 annotate:Optional[str] = None,
                 combined: Optional[bool] = False,
@@ -751,7 +751,7 @@ class SimplePlots:
                 ax:Optional[plt.Axes] = None,
                 return_stats:bool=True,
                 adjust_covar:Optional[dict]=None,
-                multi_plot:bool=False,
+                plot_type:str='grid',
                 scaling:Optional[str] = 'both', **figkwargs) -> None:
         """
         Fit linear regression, where y~x. calculates the pval and beta coefficient.
@@ -768,10 +768,10 @@ class SimplePlots:
             then plot by hue is implied. Make sure that x is in 2 dimension.
         colorby:Union[np.ndarray, pd.DataFrame, pd.Series, str]
             value to color the scatter points.
-        hue:Union[np.ndarray, pd.DataFrame, pd.Series, str]
+        hue:str
             separate data point by another value in the dataframe (e.g. cohort).
             It will calculate separate beta and p-value.
-            The default is None.
+            The default is None. Must provide data frame
             NOTE: defining hue is the same as defining multiple columns. For example, you want to plot different 
         data : Optional[pd.DataFrame], optional
             if providing string x,y, then data will be the dataframe. The default is None.
@@ -827,6 +827,8 @@ class SimplePlots:
             figkwargs['cmap_reversed'] = False
         if 'edgecolors' not in figkwargs:
             figkwargs['edgecolors'] = 'face'
+        if 'figsize' not in figkwargs:
+            figkwargs['figsize'] = (20,10)
         
         x,xlabel,row_names = SimplePlots.return_array(x,
                                                data,
@@ -874,29 +876,42 @@ class SimplePlots:
                                 ylabel = [f'Adj. {i}' for i in ylabel]
                             elif isinstance(ylabel,str):
                                 ylabel = f'Adj. {ylabel}'
-                
+
+        if x.ndim > 1 and y.ndim == 1:
+            raise TypeError('Please provide only the following option: x single value, y single value; x single value, y list of values, x list of values and y list of values.')
         
         if x.ndim == 1:
             x = x.reshape(-1, 1)
         
-
-        if y.ndim > 1 and y.shape[1] > 1:#if y is defined as list, then hue is automatically applied
+        #SPECIAL CASE 1: when y is defined as a list but x is not a list, e.g., list of strings that corresponds to different columns, then hue is applied.
+        multiplot=False
+        if y.ndim > 1 and y.shape[1] > 1: #if y is defined as list, then hue is automatically applied
             if not isinstance(column_names,list):
                 if isinstance(column_names,str):
                     column_names = [f'{column_names}_{col+1}' for col in range(y.shape[1])]
                 else:
-                    column_names = [f'Hue_{col+1}' for col in range(y.shape[1])]
-            column_names = np.asarray([col for col in column_names for row in range(y.shape[0])]).reshape(-1,1)
-            x = np.concatenate([x for i in range(y.shape[1])])
-            y = np.concatenate([y[:,i] for i in range(y.shape[1])]).reshape(-1,1)
-            data = pd.DataFrame(np.concatenate([column_names,x,y],axis=1))
+                    column_names = [f'Y_{col+1}' for col in range(y.shape[1])]
+            if x.ndim > 1:
+                if not isinstance(row_names,list):
+                    if isinstance(row_names,str):
+                        row_names = [f'{row_names}_{row+1}' for row in range(x.shape[1])]
+                    else:
+                        if xlabel is not None:
+                            row_names = [xlabel]
+                        else:
+                            row_names = [f'X_{row+1}' for row in range(x.shape[1])]
+            # return row_names,column_names,x,y
+            row_columns = np.asarray([(row_names[i],column_names[n],x[idx,i],y[idx,n]) for i in range(len(row_names)) for n in range(len(column_names)) for idx in range(y.shape[0])])
             
-            data.columns = ['hue','x','y']
-            hue = 'hue'
-
+            data = pd.DataFrame(row_columns)
+            data.columns = ['X_label','Y_label','x','y']
+            data['x'] = data['x'].astype('float64')
+            data['y'] = data['y'].astype('float64')
+            multiplot=True
+        
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-                
+            
         if 'linewidth' not in figkwargs:
             figkwargs['linewidth'] = 1.5
         if 'markersize' not in figkwargs:
@@ -913,7 +928,8 @@ class SimplePlots:
                      unique_label=None, 
                      combined=False, 
                      scaling=scaling,
-                     edgecolors=figkwargs['edgecolors']):
+                     edgecolors=figkwargs['edgecolors'],
+                     ax=ax):
             #calculating the mass univariate
             model, _ = stats.MassUnivariate.mass_univariate(
                 cont_independentVar_cols=x,
@@ -966,26 +982,57 @@ class SimplePlots:
                 if not figkwargs['hide_CI']:
                     ax.fill_between(x[sorted_x, 0], df_predictions.loc[sorted_x, 'mean_ci_lower'], df_predictions.loc[sorted_x,
                                     'mean_ci_upper'], linestyle='--', alpha=.1, color='crimson')
-        if ax is None:
-            fig, ax = plt.subplots()
-        if hue is None:
-            plotting(x, y,color=color,annotate=annotate,scaling=scaling)
-            
-        else:
+        set_label=True
+        if multiplot:
+            assert hue is None, 'too complicated, cannot have hue'
+            if plot_type == 'grid': # x vs. y
+                fig,axes = plt.subplots(len(column_names),len(row_names),figsize=figkwargs['figsize'],sharex=True,sharey=True)
+                axes = axes.flatten()
+                for (row,col),ax in zip(product(row_names,column_names),axes): 
+                    temp_data = data[(data['X_label']==row) & (data['Y_label']==col)]
+                    temp_x = np.array(temp_data['x']).reshape(-1,1)
+                    temp_y = np.array(temp_data['y']).reshape(-1,1)
+                    plotting(temp_x,temp_y,scaling=scaling,ax=ax)
+                    temp_xlabel = f'standardize({row})' if scaling=='both' or scaling=='x' else row
+                    temp_ylabel = f'standardize({col})' if scaling=='both' or scaling=='x' else col
+                    ax.set_xlabel(temp_xlabel,fontsize=figkwargs['fontsize'])
+                    ax.set_ylabel(temp_ylabel,fontsize=figkwargs['fontsize'])
+                    ax.legend(loc='lower right')
+                figkwargs['legend'] = False
+                set_label = False
+            elif plot_type == 'combined':
+                assert len(row_names) == 1, 'Cannot do combined plot if there are multiple values on both axes, only multiple values on the y argument and single value on x argument'
+                fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+                data = data.reset_index(drop=True)
+                unique_hues = data['Y_label'].unique()
+                for idx, unique_hue in enumerate(unique_hues):
+                    temp_data = data[data['Y_label'] == unique_hue]
+                    temp_x = np.array(temp_data['x']).reshape(-1,1)
+                    temp_y = np.array(temp_data['y']).reshape(-1,1)
+                    plotting(temp_x, temp_y,
+                            unique_label=unique_hue,scaling=scaling,ax=ax)
+                if combined:
+                    plotting(x,y,combined=True,scaling=scaling,ax=ax)
+                    
+        if isinstance(hue,str):
+            assert isinstance(data,pd.DataFrame), 'dataframe is missing'
+            assert not multiplot, 'too complicated, cannot have hue and multiple value on y argument'
+            fig,ax = plt.subplots(figsize=figkwargs['figsize'])
             data = data.reset_index(drop=True)
             unique_hues = data[hue].unique()
             for idx, unique_hue in enumerate(unique_hues):
                 temp_data = data[data[hue] == unique_hue].index.to_list()
                 plotting(x[temp_data], y[temp_data],
-                         unique_label=unique_hue,scaling=scaling)
+                         unique_label=unique_hue,scaling=scaling,ax=ax)
             if combined:
-                plotting(x,y,combined=True,scaling=scaling)
-    
-        xlabel=f'standardize({xlabel})' if scaling=='both' or scaling=='x' else xlabel
-        ylabel=f'standardize({ylabel})' if scaling=='both' or scaling=='y' else ylabel
-        ax.set_xlabel(xlabel,fontsize=figkwargs['fontsize'])
-        ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
+                plotting(x,y,combined=True,scaling=scaling,ax=ax)
         
+        if set_label:
+            xlabel=f'standardize({xlabel})' if scaling=='both' or scaling=='x' else xlabel
+            ylabel=f'standardize({ylabel})' if scaling=='both' or scaling=='y' else ylabel
+            ax.set_xlabel(xlabel,fontsize=figkwargs['fontsize'])
+            ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
+            
         if figkwargs['colorbar_label'] is not None:
             if color is None:
                 raise AttributeError('you have not defined colorby and you want to have a color label')
@@ -1002,8 +1049,12 @@ class SimplePlots:
                 ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
             else:
                 ax.legend(loc=figkwargs['legend_loc'])
-        ax.set_title(title)
-        return ax
+        
+        if not multiplot or plot_type != 'grid': 
+            ax.set_title(title)
+        if multiplot and plot_type == 'grid':
+            fig.suptitle(title)
+        
 
     def Box(x: Union[np.ndarray,pd.DataFrame,pd.Series,list,str],
             y: Union[np.ndarray, pd.DataFrame, pd.Series,list, str],
