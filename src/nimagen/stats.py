@@ -16,6 +16,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler, LabelBinarizer
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
 
 from patsy import PatsyError
 
@@ -1226,6 +1227,7 @@ class FeatureReduction:
         """
         pca = PCA(n_components=n_components,
                   random_state=random_state)
+        scaler=StandardScaler()
         if dependentVar_cols is not None:
             if not isinstance(dependentVar_cols,list):
                 dependentVar_cols = [dependentVar_cols]
@@ -1237,14 +1239,18 @@ class FeatureReduction:
         elif isinstance(df,np.ndarray):
             X = df.copy()
         if scaling:
-            X = StandardScaler().fit_transform(X)
-        X_pca = pca.fit_transform(X)
-        loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+            model = Pipeline([('scaler',scaler),
+                              ('pca',pca)])
+            X_pca = model.fit_transform(X)
+        else:
+            model = Pipeline([('pca',pca)])
+            X_pca = model.fit_transform(X)
+        loadings = model['pca'].components_.T * np.sqrt(model['pca'].explained_variance_)
         if dependentVar_cols is not None:
             loading_matrix = pd.DataFrame(loadings, index = dependentVar_cols)
         else:
             loading_matrix = pd.DataFrame(loadings)
-        return pca, X_pca, loading_matrix    
+        return model, X_pca, loading_matrix    
     
     @staticmethod
     def combine_columns_together(df:pd.DataFrame,
