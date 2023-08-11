@@ -434,13 +434,13 @@ class SimplePlots:
                                         ('y2',float)])
         
         if order is not None:
-            assert isinstance(order,dict),'wrong argument type for order'
-            for k,v in order.items():
-                assert len(set(all_bars_vals[k])) == len(v), f'the number of values in {k} in order argument does not match the provided dataframe'
-                assert set(v).issubset(all_bars_vals[k]), f'you have provided wrong names in {k} in order argument'
+            
             if 'order_reversed' not in figkwargs:
                 figkwargs['order_reversed'] = False
             if isinstance(order,dict):
+                for k,v in order.items():
+                    assert len(set(all_bars_vals[k])) == len(v), f'the number of values in {k} in order argument does not match the provided dataframe'
+                    assert set(v).issubset(all_bars_vals[k]), f'you have provided wrong names in {k} in order argument'
                 all_bars_vals = SimplePlots.sort_array(all_bars_vals,
                                                         specific_order=order)
             else:
@@ -592,25 +592,27 @@ class SimplePlots:
                                      color=None,
                                      alpha=None,
                                      log=False,
-                                     bottom=0):
+                                     bottom=0,
+                                     orientation='vertical'):
                 mean_pos = np.arange(1,len(unique_hue)+1).mean()
                 if len(unique_hue)%2==0:
                     shift = (label_idx+1) - int(np.ceil(mean_pos))
-                    ax.bar(x_pos+(shift*barwidth/len(unique_hue)),
-                           y,
-                           barwidth/len(unique_hue),
-                           color=color,label=label,alpha=alpha,log=log,bottom=bottom)
-                    if y2 is not None:
-                        pass
                 else:
                     shift = (label_idx+1) - int(np.floor(mean_pos))
-                    ax.bar(x_pos+(shift*(barwidth/len(unique_hue))),
-                           y,
-                           (barwidth/len(unique_hue)),
-                           color=color,label=label,alpha=alpha,log=log,bottom=bottom)
+                if orientation == 'horizontal':
+                    ax.barh(x_pos+(shift*barwidth/len(unique_hue)),
+                                y,
+                                barwidth/len(unique_hue),
+                                color=color,label=label,alpha=alpha,log=log)
+                    ax.set_yticks(temp_x_pos,get_unique(temp_x))
+                else:
+                    ax.bar(x_pos+(shift*barwidth/len(unique_hue)),
+                            y,
+                            barwidth/len(unique_hue),
+                            color=color,label=label,alpha=alpha,log=log,bottom=bottom)
 
                 return ax
-        # return x,y,hue,separateby, uniq_separateby
+
         for idx, ax in enumerate(axes):
             if separateby is not None:
                 try:
@@ -638,28 +640,38 @@ class SimplePlots:
                 
                 if hue is not None:
                     unique_hue = get_unique(hue)
-                
                     for label_idx,label in enumerate(unique_hue):
-                        ax = plot_group_bar_chart(temp_x_pos, 
-                                            temp_y[np.where(temp_hue == label)],
-                                            figkwargs['barwidth'], 
-                                            label_idx, 
-                                            label, 
-                                            unique_hue,
-                                            ax,
-                                            color=color_separately,
-                                            alpha=figkwargs['alpha'],
-                                            log=figkwargs['yscalelog'],
-                                            bottom=bottom)
+                        ax = plot_group_bar_chart(
+                            temp_x_pos, 
+                            temp_y[np.where(temp_hue == label)],
+                            figkwargs['barwidth'], 
+                            label_idx, 
+                            label, 
+                            unique_hue,
+                            ax,
+                            color=color_separately,
+                            alpha=figkwargs['alpha'],
+                            log=figkwargs['yscalelog'],
+                            bottom=bottom,
+                            orientation=orientation)
                         if y2 is not None:#plot point plot on the second plot not yet implemented
-                            pass            
+                            pass
                 else:
-                    ax.bar(temp_x_pos,temp_y,color=color_separately,alpha=figkwargs['alpha'],
-                           log=figkwargs['yscalelog'],bottom=bottom)
+                    if orientation == 'horizontal':
+                        ax.barh(temp_x_pos,temp_y,color=color_separately,
+                                alpha=figkwargs['alpha'],
+                                log=figkwargs['yscalelog'],bottom=bottom)
+                    else:
+                        ax.bar(temp_x_pos,temp_y,color=color_separately,
+                               alpha=figkwargs['alpha'],
+                               log=figkwargs['yscalelog'],bottom=bottom)
                 if figkwargs['plot_label'] is None:
                     figkwargs['plot_label'] = ''
                 ax.set_title(f"{figkwargs['plot_label']}|{uniq_separateby[idx]}",fontsize=figkwargs['plot_title_fontsize'])
-                ax.set_xticks(temp_x_pos,get_unique(temp_x))
+                if orientation == 'horizontal':
+                    ax.set_yticks(temp_x_pos,get_unique(temp_x))
+                else:
+                    ax.set_xticks(temp_x_pos,get_unique(temp_x))
                 ax.set(xlabel=None)
                 ax.set(ylabel=None)
             
@@ -677,12 +689,20 @@ class SimplePlots:
                                              color=None,
                                              alpha=figkwargs['alpha'],
                                              log=figkwargs['yscalelog'],
-                                             bottom=bottom)
+                                             bottom=bottom,
+                                             orientation=orientation)
                 else:
-                    ax.bar(x_pos,y,color=color,alpha=figkwargs['alpha'],
-                           log=figkwargs['yscalelog'],bottom=bottom)
+                    if orientation == 'horizontal':
+                        ax.barh(x_pos,y,color=color,alpha=figkwargs['alpha'],
+                               log=figkwargs['yscalelog'])
+                    else:
+                        ax.bar(x_pos,y,color=color,alpha=figkwargs['alpha'],
+                               log=figkwargs['yscalelog'],bottom=bottom)
                     
-                ax.set_xticks(x_pos,get_unique(x))
+                if orientation == 'horizontal':
+                    ax.set_yticks(x_pos,get_unique(x))
+                else:
+                    ax.set_xticks(x_pos,get_unique(x))
             
             if figkwargs['hline'] is not None:
                 number_of_plots = 1 if separateby is None else len(uniq_separateby)
@@ -725,10 +745,10 @@ class SimplePlots:
                 ax = axes[2]
             else:
                 ax = axes[-1]
-            if figkwargs['legend_loc'] == 'outside':
+            if figkwargs['legend_loc'] == 'outside' or figkwargs['legend_loc'] == 'center left':
                 ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
             else:
-                ax.legend(loc='lower left')
+                ax.legend(loc=figkwargs['legend_loc'])
         
         if figkwargs['colorbar_label'] is not None:
             if colorby is None:
