@@ -1813,7 +1813,7 @@ class Brainmap:
                             frameon=False)
 
         for view in map_view:
-            sns.despine(bottom=True,left=True,right=True)
+            map_view_dict[view]['ax'].spines[['left','right','top','bottom']].set_visible(False)
             map_view_dict[view]['ax'].set_xticks([])
             map_view_dict[view]['ax'].set_yticks([])
             
