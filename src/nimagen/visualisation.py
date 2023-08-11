@@ -604,7 +604,6 @@ class SimplePlots:
                                 y,
                                 barwidth/len(unique_hue),
                                 color=color,label=label,alpha=alpha,log=log)
-                    ax.set_yticks(temp_x_pos,get_unique(temp_x))
                 else:
                     ax.bar(x_pos+(shift*barwidth/len(unique_hue)),
                             y,
@@ -642,11 +641,11 @@ class SimplePlots:
                     unique_hue = get_unique(hue)
                     for label_idx,label in enumerate(unique_hue):
                         ax = plot_group_bar_chart(
-                            temp_x_pos, 
+                            temp_x_pos,
                             temp_y[np.where(temp_hue == label)],
-                            figkwargs['barwidth'], 
-                            label_idx, 
-                            label, 
+                            figkwargs['barwidth'],
+                            label_idx,
+                            label,
                             unique_hue,
                             ax,
                             color=color_separately,
