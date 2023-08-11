@@ -28,10 +28,11 @@ import operator
 class SimplePlots:
     
     @staticmethod
-    def return_array(x:Union[np.ndarray,pd.DataFrame,pd.Series,str,List[Union[str,float,int,pd.Series,np.ndarray]]]=None,
-                     data:Optional[pd.DataFrame]=None,
-                     must_be:Optional[str]=None,
-                     variable_label:Optional[str]=None) -> np.ndarray:
+    def return_array(x=None,
+                 data=None,
+                 must_be=None,
+                 return_array=True,
+                 variable_label=None) -> np.ndarray:
         """
         Convenience function to take in multiple data types and return numpy array
 
@@ -64,50 +65,46 @@ class SimplePlots:
         """
         if x is None:
             return x,None,None
-        if isinstance(x,list) and len(x) == 1:
-            x = x[0]
-        if isinstance(variable_label,list) and isinstance(variable_label[0],str):
-            variable_label = variable_label[0]
-        column_names = variable_label
-        if isinstance(x,(pd.DataFrame,pd.Series)):
-            if x.ndim == 1:
-                if not isinstance(variable_label,str):
-                    if isinstance(x,pd.Series):
-                        variable_label = x.name
-                    else:
-                        variable_label = x.columns[0]
-                x = x.values #np.ndarray
-            else: # if x.ndim > 1
-                column_names = x.columns.tolist()
+        
+        else:
+            if isinstance(x,(pd.DataFrame,pd.Series)):
+                x = pd.DataFrame(x) if isinstance(x,pd.Series) else x
+                variable_label = x.columns.tolist() if variable_label is None else variable_label
                 x = x.values
-                
-        elif isinstance(x, str):
-            if not isinstance(variable_label,str):
-                variable_label = x
-            x = data.loc[:, x].values
-        #make sure x is all strings
-        elif isinstance(x, np.ndarray):
-            pass
-        elif isinstance(x, list):
-            if isinstance(x[0],str) and data is not None:
-                column_names = x            
-                x = data[x].values # multiple columns arrays
-            elif isinstance(x[0],list):
-                x = np.array(x).T
-            elif isinstance(x[0],pd.Series): 
-                column_names = [i.name for i in x]
-                x = np.array(x).T
-            elif isinstance(x[0],np.ndarray):
-                x = np.array(x).T
-                if x.ndim > 2:
-                    raise TypeError('if providing list of arrays, arrays must be 1 dimensional')
-            elif isinstance(x[0],(float,int,str)):
-                x = np.array(x)
-                
-        if must_be is not None:
-            x = x.astype(must_be)
-        return x,variable_label,column_names
-    
+            if isinstance(x,str):
+                x = [x]
+            if isinstance(x,np.ndarray):
+                if x.ndim == 1:
+                    x = [x]
+            if isinstance(x,list):
+                if all(isinstance(i,str) for i in x):
+                    assert isinstance(data,pd.DataFrame), 'missing the dataframe'
+                    variable_label = x if variable_label is None else variable_label
+                    x = data[x].values 
+                elif all(isinstance(i,list) for i in x): # list of list
+                    x = np.array(x).T
+                elif all(isinstance(i,pd.Series) for i in x): # list of series
+                    variable_label = [i.name for i in x]
+                    x = np.array(x).T
+                elif all(isinstance(i,np.ndarray) for i in x):
+                    x = np.array(x).T
+                    if x.ndim > 2:
+                        raise TypeError('if providing list of arrays, arrays must be 1 dimensional')
+                elif all(isinstance(i,(float,int)) for i in x):
+                    x = np.array(x).reshape(-1,1)
+            
+            if variable_label is None:
+                variable_label = ['None' for i in range(x.shape[1])]
+            variable_label = [variable_label] if isinstance(variable_label,str) else variable_label
+            if len(variable_label) != x.shape[1]:
+                    variable_label = [variable_label[0] for i in range(x.shape[1])]
+
+            if must_be is not None:
+                x = x.astype(must_be)
+            if not return_array:
+                x = list(chain.from_iterable(x))
+            return x,variable_label,variable_label
+            
     class Groupby:
         
         @staticmethod
@@ -282,7 +279,16 @@ class SimplePlots:
         color = np.array(pal)[rank]
         return color,scalar_mappable
     
+    @staticmethod
+    def plot_legend_loc(ax,return_stats=True,plot_legend=True,**figkwargs):
+        if return_stats:
+            if plot_legend:                
+                if figkwargs['legend_loc']=='outside':
+                    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+                else:
+                    ax.legend(loc=figkwargs['legend_loc'])
         
+
     @staticmethod
     def Bar(x: Union[np.ndarray,pd.DataFrame,pd.Series,list,str],
             y: Union[np.ndarray, pd.DataFrame, pd.Series,list, str],
@@ -294,6 +300,7 @@ class SimplePlots:
             data: Optional[pd.DataFrame] = None,
             groupby_operation:Union[str,dict]='sum',
             title:Optional[str] = None,
+            orientation:Optional[str]='vertical',
             fig:Optional[plt.Figure] = None,
             ax:Optional[plt.Axes] = None, **figkwargs) -> Optional[plt.Axes]:
         """
@@ -305,8 +312,7 @@ class SimplePlots:
             X-axis. Must be categorical data
         y : Union[np.ndarray, pd.DataFrame, pd.Series,list, str]
             Y-axis. Must be continuous data
-        y2 : Union[np.ndarray, pd.DataFrame, pd.Series,list, str]
-            Y-axis on the left side. Must be continuous data. used to draw point plots
+        y2 : Union[np.ndarrxeft side. Must be continuous data. used to draw point plots
         colorby : Union[np.ndarray,pd.DataFrame,pd.Series,list,str], optional
             Continuous data that can be used to color each bar. The default is 
             None.
@@ -381,12 +387,12 @@ class SimplePlots:
            return fig ploted 
 
         """
-        x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str')
-        y,ylabel,_ = SimplePlots.return_array(y,data=data)
-        y2,y2label,_ = SimplePlots.return_array(y2,data=data)
-        colorby,colorbar_label,_ = SimplePlots.return_array(colorby,data=data)
-        separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str')
-        hue,legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str')
+        x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str',return_array=False)
+        y,ylabel,_ = SimplePlots.return_array(y,data=data,return_array=False)
+        y2,y2label,_ = SimplePlots.return_array(y2,data=data,return_array=False)
+        colorby,colorbar_label,_ = SimplePlots.return_array(colorby,data=data,return_array=False)
+        separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str',return_array=False)
+        hue,legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str',return_array=False)
         if (hue is not None) and (colorby is not None):
             #if both hue and colorby is present, show only hue
             colorby = None
@@ -399,12 +405,10 @@ class SimplePlots:
             hue = [None for i in range(len(x))]
         if y2 is None:
             y2 = [0 for i in range(len(x))]
-
         #you want to groupby x in case x is not unique.
         to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y,colorby=colorby,y2=y2)
         to_plot_dictionary = SimplePlots.Groupby.groupby_operation(to_plot_dictionary,
                                                                     operation=groupby_operation)
-        
         all_bars = list(set(product(separateby,x,hue))) # all the bars combinations
         def getFromDict(dictionary,mapList):
             #convenience function where you get the values from dictionary by passing a list of keys.
@@ -430,6 +434,10 @@ class SimplePlots:
                                         ('y2',float)])
         
         if order is not None:
+            assert isinstance(order,dict),'wrong argument type for order'
+            for k,v in order.items():
+                assert len(set(all_bars_vals[k])) == len(v), f'the number of values in {k} in order argument does not match the provided dataframe'
+                assert set(v).issubset(all_bars_vals[k]), f'you have provided wrong names in {k} in order argument'
             if 'order_reversed' not in figkwargs:
                 figkwargs['order_reversed'] = False
             if isinstance(order,dict):
@@ -466,6 +474,7 @@ class SimplePlots:
             colorby = None
         if all(item==0 for item in y2):
             y2 = None
+            
         #Here you have two np.arrays: all_bars = nx3 shape where 
         #column1=separateby column2=x column3= hue
         #all_values = nx2 column1 = y, column2 = colorby
@@ -518,23 +527,32 @@ class SimplePlots:
 
         if separateby is not None: # plot different category into different plots. Useful when you want to show a common colorbar
             uniq_separateby = get_unique(separateby)
-            if len(uniq_separateby)>3:
-                row = int(np.ceil(len(uniq_separateby)/3))
-                column = 3
-            else:
-                row =1
-                column = len(uniq_separateby)
-            fig,axes = plt.subplots(row,column,sharex=True,sharey=True,figsize=figkwargs['figsize'])
-            if isinstance(axes,plt.Axes):
-                axes = [axes]
-            else:
-                if len(axes) > 1:
-                    axes = axes.flatten()
+            if ax is None:
+                if len(uniq_separateby)>3:
+                    row = int(np.ceil(len(uniq_separateby)/3))
+                    column = 3
                 else:
+                    row =1
+                    column = len(uniq_separateby)
+                fig,axes = plt.subplots(row,column,sharex=True,sharey=True,figsize=figkwargs['figsize'])
+                if isinstance(axes,plt.Axes):
                     axes = [axes]
+                else:
+                    if len(axes) > 1:
+                        axes = axes.flatten()
+                    else:
+                        axes = [axes]
+            else:
+                if isinstance(ax,plt.Axes):
+                    axes=[ax]
+                    row,column = 1,1
+                else:
+                    assert all(isinstance(i,plt.Axes) for i in ax), 'you have not provided axes'
+                    axes = ax
+                    row = axes[0].get_gridspec().nrows
+                    column = axes[0].get_gridspec().ncols
         else:
-            row = 1
-            column = 1
+            row,column = 1,1
             if ax is None:
                 fig, ax = plt.subplots(figsize=figkwargs['figsize'])
             axes = [ax]
@@ -590,7 +608,7 @@ class SimplePlots:
                            y,
                            (barwidth/len(unique_hue)),
                            color=color,label=label,alpha=alpha,log=log,bottom=bottom)
-            
+
                 return ax
         # return x,y,hue,separateby, uniq_separateby
         for idx, ax in enumerate(axes):
@@ -617,24 +635,24 @@ class SimplePlots:
 
                 else:
                     color_separately = None
-
+                
                 if hue is not None:
                     unique_hue = get_unique(hue)
+                
                     for label_idx,label in enumerate(unique_hue):
                         ax = plot_group_bar_chart(temp_x_pos, 
-                                             temp_y[np.where(temp_hue == label)],
-                                             figkwargs['barwidth'], 
-                                             label_idx, 
-                                             label, 
-                                             unique_hue,
-                                             ax,
-                                             color=color_separately,
-                                             alpha=figkwargs['alpha'],
-                                             log=figkwargs['yscalelog'],
-                                             bottom=bottom)
-                        if y2 is not None:#plot point plot on the second plot
-                            pass
-                            
+                                            temp_y[np.where(temp_hue == label)],
+                                            figkwargs['barwidth'], 
+                                            label_idx, 
+                                            label, 
+                                            unique_hue,
+                                            ax,
+                                            color=color_separately,
+                                            alpha=figkwargs['alpha'],
+                                            log=figkwargs['yscalelog'],
+                                            bottom=bottom)
+                        if y2 is not None:#plot point plot on the second plot not yet implemented
+                            pass            
                 else:
                     ax.bar(temp_x_pos,temp_y,color=color_separately,alpha=figkwargs['alpha'],
                            log=figkwargs['yscalelog'],bottom=bottom)
@@ -828,7 +846,7 @@ class SimplePlots:
         if 'edgecolors' not in figkwargs:
             figkwargs['edgecolors'] = 'face'
         if 'figsize' not in figkwargs:
-            figkwargs['figsize'] = (20,10)
+            figkwargs['figsize'] = (6.4,4.8)
         
         x,xlabel,row_names = SimplePlots.return_array(x,
                                                data,
@@ -897,7 +915,7 @@ class SimplePlots:
                         row_names = [f'{row_names}_{row+1}' for row in range(x.shape[1])]
                     else:
                         if xlabel is not None:
-                            row_names = [xlabel]
+                            row_names = [xlabel] if isinstance(xlabel,str) else xlabel
                         else:
                             row_names = [f'X_{row+1}' for row in range(x.shape[1])]
             # return row_names,column_names,x,y
@@ -911,7 +929,9 @@ class SimplePlots:
         
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-            
+        
+        if 'legend_loc' not in figkwargs:
+            figkwargs['legend_loc'] = 'outside'    
         if 'linewidth' not in figkwargs:
             figkwargs['linewidth'] = 1.5
         if 'markersize' not in figkwargs:
@@ -924,11 +944,12 @@ class SimplePlots:
         def plotting(x,
                      y,
                      color=None,
-                     annotate=None, 
+                     annotate=annotate, 
                      unique_label=None, 
                      combined=False, 
                      scaling=scaling,
                      edgecolors=figkwargs['edgecolors'],
+                     return_stats=return_stats,
                      ax=ax):
             #calculating the mass univariate
             model, _ = stats.MassUnivariate.mass_univariate(
@@ -985,9 +1006,17 @@ class SimplePlots:
         set_label=True
         if multiplot:
             assert hue is None, 'too complicated, cannot have hue'
-            if plot_type == 'grid': # x vs. y
-                fig,axes = plt.subplots(len(column_names),len(row_names),figsize=figkwargs['figsize'],sharex=True,sharey=True)
-                axes = axes.flatten()
+            if plot_type == 'grid': # x vs. y                    
+                if ax is None:
+                    fig,axes = plt.subplots(len(column_names),len(row_names),figsize=figkwargs['figsize'],sharex=True,sharey=True)
+                    axes = axes.flatten()
+                else:
+                    axes = ax
+                    if isinstance(axes,np.ndarray):
+                        if axes.ndim == 2:
+                            axes = axes.flatten()
+                            assert all(isinstance(ax,plt.Axes) for ax in axes), 'Not all of your figure are of plt.Axes type'
+                    assert len(axes) == len(column_names)*len(row_names), 'Number of ax provided do not match the number of plot you want'
                 for idx,((col,row),ax) in enumerate(zip(product(column_names,row_names),axes)):
                     temp_data = data[(data['X_label']==row) & (data['Y_label']==col)]
                     temp_x = np.array(temp_data['x']).reshape(-1,1)
@@ -1000,14 +1029,17 @@ class SimplePlots:
                         ax.set_ylabel(temp_ylabel,fontsize=figkwargs['fontsize'])    
                     if idx>=(len(row_names)*(len(column_names)-1)):
                         ax.set_xlabel(temp_xlabel,fontsize=figkwargs['fontsize'])
-                            
-
-                    ax.legend(loc='lower right')
+                    
+                    SimplePlots.plot_legend_loc(ax,return_stats=return_stats,plot_legend=True,**figkwargs)
+                    
                 figkwargs['legend'] = False
                 set_label = False
             elif plot_type == 'combined':
                 assert len(row_names) == 1, 'Cannot do combined plot if there are multiple values on both axes, only multiple values on the y argument and single value on x argument'
-                fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+                if ax is None:
+                    fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+                else:
+                    assert isinstance(ax,plt.Axes), 'You have provided more than one subplot'
                 data = data.reset_index(drop=True)
                 unique_hues = data['Y_label'].unique()
                 for idx, unique_hue in enumerate(unique_hues):
@@ -1022,7 +1054,10 @@ class SimplePlots:
         if isinstance(hue,str):
             assert isinstance(data,pd.DataFrame), 'dataframe is missing'
             assert not multiplot, 'too complicated, cannot have hue and multiple value on y argument'
-            fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+            if ax is None:
+                fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+            else:
+                assert isinstance(ax,plt.Axes), 'You have provided more than one subplot'
             data = data.reset_index(drop=True)
             unique_hues = data[hue].unique()
             for idx, unique_hue in enumerate(unique_hues):
@@ -1032,14 +1067,24 @@ class SimplePlots:
             if combined:
                 plotting(x,y,combined=True,scaling=scaling,ax=ax)
         
+        else:
+            if not multiplot:
+                if ax is None:
+                    fig,ax = plt.subplots(figsize=figkwargs['figsize'])
+                else:
+                    assert isinstance(ax,plt.Axes), 'You have provided more than one subplot'
+                plotting(x,y,scaling=scaling,ax=ax)
+        
         if set_label:
-            xlabel=f'standardize({xlabel})' if scaling=='both' or scaling=='x' else xlabel
-            ylabel=f'standardize({ylabel})' if scaling=='both' or scaling=='y' else ylabel
+            xlabel=f'standardize({xlabel[0]})' if scaling=='both' or scaling=='x' else xlabel[0]
+            ylabel=f'standardize({ylabel[0]})' if scaling=='both' or scaling=='y' else ylabel[0]
             if ylabel != 'standardize(None)':
                 ax.set_ylabel(ylabel,fontsize=figkwargs['fontsize'])
             ax.set_xlabel(xlabel,fontsize=figkwargs['fontsize'])
             
         if figkwargs['colorbar_label'] is not None:
+            if fig is None:
+                raise ValueError('Fig has not been defined. Either provide a fig argument, or do not provide ax argument')
             if color is None:
                 raise AttributeError('you have not defined colorby and you want to have a color label')
             cbar_ax = fig.add_axes(figkwargs['colorbar_axes'])
@@ -1047,18 +1092,14 @@ class SimplePlots:
             cbar.set_label(figkwargs['colorbar_label'], size=12)
         
         if 'legend' not in figkwargs:
-            figkwargs['legend']=True
-        if figkwargs['legend']:
-            if 'legend_loc' not in figkwargs:
-                figkwargs['legend_loc'] = 'outside'
-            if figkwargs['legend_loc'] == 'outside':
-                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-            else:
-                ax.legend(loc=figkwargs['legend_loc'])
-        
+            figkwargs['legend'] = True
+        SimplePlots.plot_legend_loc(ax,return_stats=return_stats,plot_legend=figkwargs['legend'],**figkwargs)
+
         if not multiplot or plot_type != 'grid': 
             ax.set_title(title)
         if multiplot and plot_type == 'grid':
+            if fig is None:
+                raise ValueError('Fig has not been defined. Either provide a fig argument, or do not provide ax argument')
             fig.suptitle(title)
         
 
