@@ -643,22 +643,14 @@ class SimplePlots:
                 temp_y = y[current_separateby_index]
                 # temp_y = temp_y[sort_indices_in_x]
                 temp_x_pos = np.arange(len(np.unique(temp_x)))
-                if hue is not None:
-                    temp_hue = hue[current_separateby_index]
-                    # temp_hue = temp_hue[sort_indices_in_x]
-                else:
-                    temp_hue = None
-                if color is not None:
-                    color_separately = color[current_separateby_index]
-                    # color_separately = color_separately[sort_indices_in_x]
-                else:
-                    color_separately = None
-                
+                temp_hue = hue[current_separateby_index] if hue is not None else None
+                color_separately = color[current_separateby_index] if color is not None else None
                 temp_annotate = annotate[current_separateby_index] if annotate is not None else None
                 
                 if hue is not None:
                     unique_hue = get_unique(hue)
                     for label_idx,label in enumerate(unique_hue):
+                        temp_to_annotate = None if temp_annotate is None else temp_annotate[np.where(temp_hue == label)] # this is necessary because if temp_annotate is NoneType, you can't do indexing.
                         ax = plot_group_bar_chart(
                             temp_x_pos,
                             temp_y[np.where(temp_hue == label)],
@@ -667,7 +659,7 @@ class SimplePlots:
                             label,
                             unique_hue,
                             ax,
-                            annotate=temp_annotate[np.where(temp_hue == label)],
+                            annotate=temp_to_annotate,
                             color=color_separately,
                             alpha=figkwargs['alpha'],
                             log=figkwargs['yscalelog'],
@@ -705,6 +697,7 @@ class SimplePlots:
                 if hue is not None:
                     unique_hue = get_unique(hue)
                     for label_idx,label in enumerate(unique_hue):
+                        temp_to_annotate = None if annotate is None else annotate[np.where(hue==label)]
                         ax = plot_group_bar_chart(x_pos, 
                                              y[np.where(hue == label)],
                                              figkwargs['barwidth'], 
@@ -712,7 +705,7 @@ class SimplePlots:
                                              label, 
                                              unique_hue,
                                              ax,
-                                             annotate=annotate[np.where(hue== label)],
+                                             annotate=temp_to_annotate,
                                              color=None,
                                              alpha=figkwargs['alpha'],
                                              log=figkwargs['yscalelog'],
