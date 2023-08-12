@@ -197,6 +197,8 @@ class SimplePlots:
             Performs recursive opening of the nested dictionary to perform some
             operations on the last layer of the dictionary
             
+            NOTE:This is necessary in case you didn't provide a dataframe with unique values
+            
             Parameters
             ----------
             groupby_dict : dict
@@ -218,20 +220,24 @@ class SimplePlots:
             def do_operation(v,operation):
                 if len(v) == 0:
                     v = [0]
-                if operation == 'sum':
-                    return np.sum(v)
-                elif operation == 'mean':
-                    return np.mean(v)
-                elif operation == 'count':
-                    return np.count_nonzero(v)
-                elif operation =='first':
-                    return v[0]
-                elif operation =='last':
-                    return v[-1]
-                elif operation == 'max':
-                    return np.max(v)
-                elif operation == 'min':
-                    return np.min(v)
+                if all(isinstance(item,str) for item in v):
+                    operation = 'first' if operation is None else operation
+                    if operation =='first':
+                        return v[0]
+                    elif operation =='last':
+                        return v[-1]
+                elif all(isinstance(item,(float,int)) for item in v):
+                    operation = 'sum' if operation is None else operation
+                    if operation == 'sum':
+                        return np.sum(v)
+                    elif operation == 'mean':
+                        return np.mean(v)
+                    elif operation == 'count':
+                        return np.count_nonzero(v)
+                    elif operation == 'max':
+                        return np.max(v)
+                    elif operation == 'min':
+                        return np.min(v)
     
             def find_last_depth(obj,operation):
                 #convenience function to recursively perform some function on
@@ -240,9 +246,10 @@ class SimplePlots:
                     if isinstance(v,dict):
                         find_last_depth(v,operation)
                     else:
-                        if isinstance(operation,dict) and k in operation:
+                        if isinstance(operation,dict):
+                            assert k in operation, 'f{k} not in available groupby operations'
                             obj[k] = do_operation(v,operation[k])
-                        elif isinstance(operation,str):
+                        else:
                             obj[k] = do_operation(v,operation)
                 return obj
             
@@ -292,13 +299,13 @@ class SimplePlots:
     @staticmethod
     def Bar(x: Union[np.ndarray,pd.DataFrame,pd.Series,list,str],
             y: Union[np.ndarray, pd.DataFrame, pd.Series,list, str],
-            y2: Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
+            annotate: Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
             colorby:Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
             separateby:Union[np.ndarray,pd.DataFrame,pd.Series,list,str]=None,
             hue: Union[np.ndarray,pd.DataFrame,pd.Series,list,str] = None,
             order:Optional[Union[list,dict,str]]='y',
             data: Optional[pd.DataFrame] = None,
-            groupby_operation:Union[str,dict]='sum',
+            groupby_operation:Union[str,dict]=None,
             title:Optional[str] = None,
             orientation:Optional[str]='vertical',
             fig:Optional[plt.Figure] = None,
@@ -312,7 +319,7 @@ class SimplePlots:
             X-axis. Must be categorical data
         y : Union[np.ndarray, pd.DataFrame, pd.Series,list, str]
             Y-axis. Must be continuous data
-        y2 : Union[np.ndarrxeft side. Must be continuous data. used to draw point plots
+        annotate : Union[np.ndarrxeft side. Must be continuous data. used to draw point plots
         colorby : Union[np.ndarray,pd.DataFrame,pd.Series,list,str], optional
             Continuous data that can be used to color each bar. The default is 
             None.
@@ -389,7 +396,7 @@ class SimplePlots:
         """
         x,xlabel,_ = SimplePlots.return_array(x,data=data,must_be='str',return_array=False)
         y,ylabel,_ = SimplePlots.return_array(y,data=data,return_array=False)
-        y2,y2label,_ = SimplePlots.return_array(y2,data=data,return_array=False)
+        annotate,_,_ = SimplePlots.return_array(annotate,data=data,must_be='str',return_array=False)
         colorby,colorbar_label,_ = SimplePlots.return_array(colorby,data=data,return_array=False)
         separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str',return_array=False)
         hue,legend_label,_ = SimplePlots.return_array(hue,data = data,must_be='str',return_array=False)
@@ -403,13 +410,16 @@ class SimplePlots:
             colorby = [0 for i in range(len(x))]
         if hue is None:
             hue = [None for i in range(len(x))]
-        if y2 is None:
-            y2 = [0 for i in range(len(x))]
+        if annotate is None:
+            annotate = [None for i in range(len(x))]
         #you want to groupby x in case x is not unique.
-        to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y,colorby=colorby,y2=y2)
+        to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y,colorby=colorby,annotate=annotate)
+        
         to_plot_dictionary = SimplePlots.Groupby.groupby_operation(to_plot_dictionary,
                                                                     operation=groupby_operation)
+        
         all_bars = list(set(product(separateby,x,hue))) # all the bars combinations
+        
         def getFromDict(dictionary,mapList):
             #convenience function where you get the values from dictionary by passing a list of keys.
             return reduce(operator.getitem, mapList,dictionary)
@@ -431,7 +441,7 @@ class SimplePlots:
                                         ('hue','O'),
                                         ('y',float),
                                         ('colorby',float),
-                                        ('y2',float)])
+                                        ('annotate','O')])
         
         if order is not None:
             
@@ -469,12 +479,12 @@ class SimplePlots:
             hue = None
         y = all_bars_vals['y']
         colorby = all_bars_vals['colorby']
-        y2= all_bars_vals['y2']
+        annotate= all_bars_vals['annotate']
         if all(item==0 for item in colorby):
             colorby = None
-        if all(item==0 for item in y2):
-            y2 = None
-            
+        if all(item is None for item in annotate):
+            annotate = None
+        
         #Here you have two np.arrays: all_bars = nx3 shape where 
         #column1=separateby column2=x column3= hue
         #all_values = nx2 column1 = y, column2 = colorby
@@ -524,6 +534,8 @@ class SimplePlots:
             figkwargs['figsize'] = None
         if 'barwidth' not in figkwargs:
             figkwargs['barwidth'] = 0.35
+        if 'annotate_fontsize' not in figkwargs:
+            figkwargs['annotate_fontsize'] = 10
 
         if separateby is not None: # plot different category into different plots. Useful when you want to show a common colorbar
             uniq_separateby = get_unique(separateby)
@@ -588,7 +600,7 @@ class SimplePlots:
                                      label,
                                      unique_hue,
                                      ax,
-                                     y2=None,
+                                     annotate=None,
                                      color=None,
                                      alpha=None,
                                      log=False,
@@ -599,17 +611,23 @@ class SimplePlots:
                     shift = (label_idx+1) - int(np.ceil(mean_pos))
                 else:
                     shift = (label_idx+1) - int(np.floor(mean_pos))
+                pos = x_pos+(shift*barwidth/len(unique_hue))
                 if orientation == 'horizontal':
-                    ax.barh(x_pos+(shift*barwidth/len(unique_hue)),
-                                y,
-                                barwidth/len(unique_hue),
-                                color=color,label=label,alpha=alpha,log=log)
-                else:
-                    ax.bar(x_pos+(shift*barwidth/len(unique_hue)),
+                    ax.barh(pos,
                             y,
                             barwidth/len(unique_hue),
-                            color=color,label=label,alpha=alpha,log=log,bottom=bottom)
-
+                            color=color,label=label,alpha=alpha,log=log)
+                    if annotate is not None:
+                        for to_annotate,height,position in zip(annotate,y,pos):
+                            ax.annotate(to_annotate,xy=(height,position),ha='left',va='center',fontsize=figkwargs['annotate_fontsize'])
+                else:
+                    ax.bar(pos,
+                           y,
+                           barwidth/len(unique_hue),
+                           color=color,label=label,alpha=alpha,log=log,bottom=bottom)
+                    if annotate is not None:
+                        for to_annotate,height,position in zip(annotate,y,pos):
+                            ax.annotate(to_annotate,xy=(position,height),ha='center',va='bottom',fontsize=figkwargs['annotate_fontsize'])
                 return ax
 
         for idx, ax in enumerate(axes):
@@ -633,9 +651,10 @@ class SimplePlots:
                 if color is not None:
                     color_separately = color[current_separateby_index]
                     # color_separately = color_separately[sort_indices_in_x]
-
                 else:
                     color_separately = None
+                
+                temp_annotate = annotate[current_separateby_index] if annotate is not None else None
                 
                 if hue is not None:
                     unique_hue = get_unique(hue)
@@ -648,22 +667,30 @@ class SimplePlots:
                             label,
                             unique_hue,
                             ax,
+                            annotate=temp_annotate[np.where(temp_hue == label)],
                             color=color_separately,
                             alpha=figkwargs['alpha'],
                             log=figkwargs['yscalelog'],
                             bottom=bottom,
                             orientation=orientation)
-                        if y2 is not None:#plot point plot on the second plot not yet implemented
+                        if annotate is not None:#plot point plot on the second plot not yet implemented
                             pass
                 else:
                     if orientation == 'horizontal':
                         ax.barh(temp_x_pos,temp_y,color=color_separately,
                                 alpha=figkwargs['alpha'],
-                                log=figkwargs['yscalelog'],bottom=bottom)
+                                log=figkwargs['yscalelog'])
+                        if temp_annotate is not None:
+                            for to_annotate,height,position in zip(temp_annotate,temp_y,temp_x_pos):
+                                ax.annotate(to_annotate,xy=(height,position),ha='left',va='center',fontsize=figkwargs['annotate_fontsize'])
                     else:
                         ax.bar(temp_x_pos,temp_y,color=color_separately,
                                alpha=figkwargs['alpha'],
                                log=figkwargs['yscalelog'],bottom=bottom)
+                        if temp_annotate is not None:
+                            for to_annotate,height,position in zip(temp_annotate,temp_y,temp_x_pos):
+                                ax.annotate(to_annotate,xy=(position,height),ha='center',va='bottom',fontsize=figkwargs['annotate_fontsize'])
+                            
                 if figkwargs['plot_label'] is None:
                     figkwargs['plot_label'] = ''
                 ax.set_title(f"{figkwargs['plot_label']}|{uniq_separateby[idx]}",fontsize=figkwargs['plot_title_fontsize'])
@@ -685,6 +712,7 @@ class SimplePlots:
                                              label, 
                                              unique_hue,
                                              ax,
+                                             annotate=annotate[np.where(hue== label)],
                                              color=None,
                                              alpha=figkwargs['alpha'],
                                              log=figkwargs['yscalelog'],
@@ -694,9 +722,16 @@ class SimplePlots:
                     if orientation == 'horizontal':
                         ax.barh(x_pos,y,color=color,alpha=figkwargs['alpha'],
                                log=figkwargs['yscalelog'])
+                        if annotate is not None:
+                            for to_annotate,height,position in zip(annotate,y,x_pos): 
+                                ax.annotate(to_annotate,xy=(height,position),ha='left',va='center',fontsize=figkwargs['annotate_fontsize'])
+                        
                     else:
                         ax.bar(x_pos,y,color=color,alpha=figkwargs['alpha'],
                                log=figkwargs['yscalelog'],bottom=bottom)
+                        if annotate is not None:
+                            for to_annotate,height,position in zip(annotate,y,x_pos):
+                                ax.annotate(to_annotate,xy=(position,height),ha='center',va='bottom',fontsize=figkwargs['annotate_fontsize'])
                     
                 if orientation == 'horizontal':
                     ax.set_yticks(x_pos,get_unique(x))
