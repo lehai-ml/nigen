@@ -17,6 +17,7 @@ import numpy as np
 import bed_reader
 import statsmodels.api as sm
 from scipy.stats import hypergeom
+from statsmodels.stats.multitest import fdrcorrection
 from collections import defaultdict
 import tqdm
 
@@ -329,7 +330,7 @@ class GeneSetEnrichment:
         """
         hypergeometric test as done in FUMA-webapp.
         original source code: https://github.com/vufuma/FUMA-webapp/blob/master/scripts/GeneSet.py
-        See overepresentation analysis (ora).
+        See ypTest and GeneSetTest function in that FUMA link.
         """
         
         def intersection(a1:np.array,a2:np.array)->np.array:
@@ -370,6 +371,9 @@ class GeneSetEnrichment:
             background_genes = np.array(background_genes)
         if isinstance(genes,str):
             genes = GeneSetEnrichment.read_gene_list(genes)
+        if isinstance(genes,list):
+            if not all(isinstance(i,str) for i in genes):
+                genes = [str(i) for i in genes]
         if not isinstance(genes,np.ndarray):
             genes = np.array(genes)
         if isinstance(pathways,str):
@@ -390,6 +394,9 @@ class GeneSetEnrichment:
             output = pd.concat([output,temp],axis=0)
         output = output.reset_index(drop=True)
         if multiple_comparison == 'bonferroni':
-            output['adjP'] = output['p'].apply(lambda x: x*len(pathways) if x<1 else x)
-        return output[output['adjP']<0.05]
+            output['adjP'] = output['p'].apply(lambda x: 1 if x*len(pathways)>1 else x*len(pathways))
+        elif multiple_comparison == 'fdr':
+            survived,adjusted_pval = fdrcorrection(output['p'],alpha=0.05)
+            output['adjP'] = adjusted_pval
+        return output
         

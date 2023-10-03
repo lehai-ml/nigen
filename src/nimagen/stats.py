@@ -794,7 +794,7 @@ class MultipleCorrection:
         elif isinstance(p_val,np.ndarray):
             if p_val.ndim != 1:
                 p_val = p_val.reshape(-1)
-        survived,adjusted_pval = fdrcorrection(p_val)
+        survived,adjusted_pval = fdrcorrection(p_val,alpha=alpha)
         if isinstance(df,pd.DataFrame):
             if return_adj:
                 df['adjP'] = adjusted_pval
