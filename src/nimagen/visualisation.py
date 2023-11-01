@@ -18,6 +18,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.patches as mpatches
 import matplotlib as mpl
 from matplotlib.colors import ListedColormap, to_rgb, rgb2hex, CSS4_COLORS
+from decimal import Decimal
 
 from collections import defaultdict
 from itertools import product, chain
@@ -1023,7 +1024,7 @@ class SimplePlots:
                 y = StandardScaler().fit_transform(y)
             if unique_label is None:
                 #calculate the correlation label
-                corr_label = r'$r$=%0.03f, pval = %0.03f' % (coefs, p_value)
+                corr_label = r'$r$=%0.03f, pval = %0.02e' % (coefs, p_value)
                 
                 if not combined:
                     ax.scatter(x[:, 0], y,c=color,s=figkwargs['markersize'],edgecolors=edgecolors)
@@ -1042,7 +1043,7 @@ class SimplePlots:
                                     'mean_ci_upper'], linestyle='--', alpha=.1, color='crimson', label=unique_label)
     
             else:
-                corr_label = r'$r$=%0.03f, pval = %0.03f' % (coefs, p_value)
+                corr_label = r'$r$=%0.03f, pval = %0.02e' % (coefs, p_value)
                 ax.plot(x[:, 0], y, '.', label=unique_label,markersize=figkwargs['markersize'])
                 handles, labels = ax.get_legend_handles_labels()
                 ax.plot(x[sorted_x, 0], y_pred[sorted_x], '-',
