@@ -210,7 +210,7 @@ Suppose you want to overlay your parcellation on your T2 image. You can do so in
 
 Here, we set our first image as the T2 (this works for anything like FA map, T1 etc.). Notice that we have to set ``T2=True``. In this particular case, the T2 image has some weird values in the background, where it is not exactly 0. So option ``background_value=1`` is defined to set any values in the T2 image below 1 to np.nan (i.e., transparent). The second image is a green outline of the parcellation map. The third image is the labels of the region of interest, where only the WM label is shown. The ``image_alpha`` option defines the overall alpha channel of the overlay image.
 
-.. image:: images/overlaying_T2.png
+.. image:: images/overlay_with_T2.png
 
 
 
