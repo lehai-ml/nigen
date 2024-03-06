@@ -1,6 +1,6 @@
 # NIMAGEN: Statistical and Visualisation tool for NeuroIMAging GENetics studies
 
-See the online [documentation](https://nimagen.readthedocs.io/en/latest/index.html) for detailed walkthrough of some of the package tools.
+See the [example documentation](docs/example/visualisation.rst) for detailed walkthrough of some of the package tools.
 
 ## Quick install
 
