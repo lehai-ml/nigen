@@ -177,7 +177,40 @@ You can do this if you pass the same axes argument to the next ``Brainmap.plot_s
     In case that your label legend is too big, and plt.tight_layout does not work properly (e.g, when you save figure, your figure is cut off). You can do the following. Define a series of smaller subplots. Group the subplots as shown in the code above. And add the label legend onto its own separate axis. Finally, you can change the ``figsize`` to get your desired plot.
 
 
+*Overlaying on a non-parcellation image (e.g. T2)*
 
+Suppose you want to overlay your parcellation on your T2 image. You can do so in a similar way to the example above.
+
+.. code-block:: python
+
+    fig = plt.figure(figsize=(18,25))
+    gs = fig.add_gridspec(1,3)
+    axes1 = fig.add_subplot(gs[0:2, 0])
+    axes2 = fig.add_subplot(gs[0:2, 1])
+    axes3 = fig.add_subplot(gs[0:2, 2])
+    
+    _,_ = visualisation.Brainmap.plot_segmentation(
+        atlas_file='../../dataset/visualise/wm_parcellation/parcellation_maps_05mm/reference-05mm-mean-T2.nii.gz',
+        axes=[axes1,axes2,axes3],cmap='gray',T2=True,background_value=1)
+    
+    _,_ = visualisation.Brainmap.plot_segmentation(
+        atlas_file='../../dataset/visualise/wm_parcellation/parcellation_maps_05mm/reference-05mm-dHCP-structure-parcellation.nii.gz',
+        regions_to_hide=[i for i in range(88)],
+        outline_alpha=1,
+        outline_colour='green',
+        axes=[axes1,axes2,axes3])
+    _,test = visualisation.Brainmap.plot_segmentation(
+        atlas_file='../../dataset/visualise/wm_parcellation/parcellation_maps_05mm/reference-05mm-dHCP-structure-parcellation.nii.gz',
+        regions_to_hide={k:v for k,v in full_legend.items() if 'WM' not in v},
+        label_legend=full_legend,
+        cmap='tab20',
+        axes=[axes1,axes2,axes3],
+        image_alpha=.5,
+        legends=False)
+
+Here, we set our first image as the T2 (this works for anything like FA map, T1 etc.). Notice that we have to set ``T2=True``. In this particular case, the T2 image has some weird values in the background, where it is not exactly 0. So option ``background_value=1`` is defined to set any values in the T2 image below 1 to np.nan (i.e., transparent). The second image is a green outline of the parcellation map. The third image is the labels of the region of interest, where only the WM label is shown. The ``image_alpha`` option defines the overall alpha channel of the overlay image.
+
+.. image:: images/overlaying_T2.png
 
 
 
