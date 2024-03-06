@@ -1570,6 +1570,7 @@ class Brainmap:
             cmap_reversed = if you want to revese the cmap default False
             cb_orientation = {'horizontal','vertical'} if you want your change your colorbar orientation. Default horizontal next to the last axes.
             cb_title = str. name of the colorbar
+            cb_threshold_greater=True, if you want the threshold to be greater or lower
             cb_vmin,cb_vmax = define the colorscale of the colorbar
             figsize = Default (20,10)
             outline_label_legends: bool. Default True. 
@@ -1705,17 +1706,24 @@ class Brainmap:
             else:
                 unique_regions = np.unique(brain_map.atlas[~np.isnan(brain_map.atlas)])
                 if plot_values_threshold is not None:
+                    figkwargs['cb_threshold_greater'] = True if 'cb_threshold_greater' not in figkwargs else figkwargs['cb_threshold_greater'] 
                     if mask is not None:
                         if not isinstance(mask,dict):
                             raise TypeError('mask needs to be a dictionary, where keys are the label, and values are the plot values')
-                        plot_values = {indx:mask[indx] if (indx in plot_values.keys()) and (plot_values[indx]>plot_values_threshold) and (indx in mask.keys()) else np.nan for indx in unique_regions}
+                        if figkwargs['cb_threshold_greater']:
+                            plot_values = {indx:mask[indx] if (indx in plot_values.keys()) and (plot_values[indx]>plot_values_threshold) and (indx in mask.keys()) else np.nan for indx in unique_regions}
+                        else:# if you want to plot values < threshold
+                            plot_values = {indx:mask[indx] if (indx in plot_values.keys()) and (plot_values[indx]<plot_values_threshold) and (indx in mask.keys()) else np.nan for indx in unique_regions}
                     else:
-                        plot_values = {indx:plot_values[indx] if (indx in plot_values.keys()) and (plot_values[indx]>plot_values_threshold) else np.nan for indx in unique_regions}                  
+                        if figkwargs['cb_threshold_greater']:
+                            plot_values = {indx:plot_values[indx] if (indx in plot_values.keys()) and (plot_values[indx]>plot_values_threshold) else np.nan for indx in unique_regions}                  
+                        else:
+                            plot_values = {indx:plot_values[indx] if (indx in plot_values.keys()) and (plot_values[indx]<plot_values_threshold) else np.nan for indx in unique_regions}                  
                 else:
                     plot_values = {indx:plot_values[indx] if indx in plot_values.keys() else np.nan for indx in unique_regions}
                 for region,value in plot_values.items():
                     brain_map.atlas[brain_map.atlas == region] = value
-        
+                    
         if 'figsize' not in figkwargs:
             figkwargs['figsize'] = (22,10)
         

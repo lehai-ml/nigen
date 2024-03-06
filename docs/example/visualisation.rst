@@ -212,6 +212,42 @@ Here, we set our first image as the T2 (this works for anything like FA map, T1 
 
 .. image:: images/overlay_with_T2.png
 
+You can combine several plots by overlaying on each other to get your desired final plot. For example, suppose you want to 1) visualise statistics (e.g., p-value) of several regions, that 2) have been grouped so the outline is different from the original parcellation file (e.g., region 1 and 2 has been grouped but you don't want to have outline of each region separately, but rather together) and 3) plotted on the T2.
+
+.. code-block:: python
+
+	fig,ax = plt.subplots(1,1)
+	# atlas_slice=[150,150,150]
+	atlas_slice=108
+	map_view=['axial']
+	_,_ = visualisation.Brainmap.plot_segmentation(
+	    map_view=map_view,
+	    atlas_file=T2_file,
+	    atlas_slice=atlas_slice,
+	    axes=[ax],cmap='gray',T2=True,background_value=1)
+	_,_ = visualisation.Brainmap.plot_segmentation(
+	    map_view=map_view,
+	    label_legend=to_plot_new,
+	    atlas_file=drawem_parcellation,
+	    image_alpha=0,
+	    outline_alpha=1,
+	    outline_colour='k',
+	    axes=[ax],legends=False)
+	_,_ = visualisation.Brainmap.plot_segmentation(
+	    map_view=map_view,
+	    atlas_slice=atlas_slice,
+	    plot_values=to_plot_new,
+	    atlas_file=drawem_parcellation,
+	    plot_values_threshold=.01,
+	    cb_threshold_greater=False,
+	    cb_vmin=0,
+	    cb_vmax=0.01,
+	    outline_alpha=0,
+	    axes=[ax],fig=fig,colorbar=True,cb_title='p-value',cb_orientation='vertical')
+	    
+Here, you can plot the T2 image first as the background. Then you plot the segmentation of your interest, here the ``to_plot_new`` is a dictionary, where key is the label corresponding to the parcellation map, and value is a p-value score. Suppose region 1 and 2 are to be grouped, then the value (i.e., p-value) must be the same for key 1 and key 2 in the ``to_plot_new``. In the second plot, you suppress the colouring of the label legends by using option ``image_alpha=0``, so that only the outline is plotted, and the ``legends=False``. In the third plot, you viusalise the ``to_plot_new``, but now you suppress the ``outline_alpha``, because by default it will outline the parcellation map. 
+
+.. image:: images/plot_pval_example.png
 
 
 
