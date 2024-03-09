@@ -601,11 +601,11 @@ class MassUnivariate:
             dictionary[model_name].append(
                 [len_variables, variables, coefs, p_vals, aic, R2, R2_adj])
         
-        null_model, _ = cls.mass_univariate(df=df,
-                                        cat_independentVar_cols=None,
-                                        cont_independentVar_cols=None,
-                                        dependentVar_cols=dependentVar_cols)
-        print_model_results(null_model, '0_0')
+        # null_model, _ = cls.mass_univariate(df=df,
+        #                                 cat_independentVar_cols=None,
+        #                                 cont_independentVar_cols=None,
+        #                                 dependentVar_cols=dependentVar_cols)
+        # print_model_results(null_model, '0_0')
         if not cat_independentVar_cols:
             cat_independentVar_cols = []
         if not cont_independentVar_cols:

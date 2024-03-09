@@ -163,7 +163,7 @@ class SimplePlots:
             temp_plot_dict=defaultdict(dict)
             args = [i for i in args if i is not None]
             kwargs = {k:v for k,v in kwargs.items() if v is not None}
-            all_unique_keys = [tuple(set(i)) for i in args]
+            all_unique_keys = [tuple(set(i)) if not isinstance(i,np.ndarray) else tuple(set(i.flatten())) for i in args]
             all_possible_keys = product(*all_unique_keys)
             all_values = list(kwargs.keys())
             for keys_combo in all_possible_keys:
@@ -180,15 +180,17 @@ class SimplePlots:
             len_args = len(args)
             for key_vals in zip(*args,*kwargs.values()):
                 keys = key_vals[:len_args]
+                keys = tuple(k if not isinstance(k,np.ndarray) else k[0] for k in keys)
                 vals = key_vals[len_args:]
+                vals = tuple(v if not isinstance(v,np.ndarray) else v[0] for v in vals)
                 obj = temp_plot_dict[keys[0]]
                 for key_idx,key in enumerate(keys):
                     if key_idx != 0:
-                        obj = obj[key]
+                        obj = obj[key] if not isinstance(key,np.ndarray) else obj[key[0]]
                     for idx,name_val in enumerate(all_values):
                         if name_val in obj:
                             obj[name_val].append(vals[idx])
-                    
+            
             return temp_plot_dict
 
         @staticmethod
@@ -1166,6 +1168,7 @@ class SimplePlots:
         xlabel=figkwargs.get('xlabel',None)
         ylabel=figkwargs.get('ylabel',None)
         
+        #this returns an array
         x,xlabel,_ = SimplePlots.return_array(x,data=data,variable_label=xlabel,must_be='str')
         y,ylabel,_ = SimplePlots.return_array(y,variable_label=ylabel,data=data)
         separateby,plot_label,_ = SimplePlots.return_array(separateby,data=data,must_be='str')
@@ -1210,11 +1213,9 @@ class SimplePlots:
                     if isinstance(ylabel,list):
                         ylabel = [f'Adj. {i}' for i in ylabel]
                     elif isinstance(ylabel,str):
-                        ylabel = f'Adj. {ylabel}'
-
+                        ylabel = f'Adj. {ylabel}'        
         #you want to groupby x in case x is not unique.
         to_plot_dictionary = SimplePlots.Groupby.groupby(separateby,x,hue,y=y)
-        
         if isinstance(order,list):
             if not all(isinstance(item,str) for item in order):
                 raise TypeError('order must be list of strings')
