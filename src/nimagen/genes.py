@@ -184,9 +184,9 @@ class SNPsFunctionalAnalysis:
             X = sm.add_constant(X)
             model = sm.OLS(Y, X, missing='drop')  # drop any missing values
             results = model.fit()
-            stat = results.tvalues[-1]
-            p_value = results.pvalues[-1]
-            beta = results.params[-1]
+            stat = results.tvalues.iloc[-1]
+            p_value = results.pvalues.iloc[-1]
+            beta = results.params.iloc[-1]
             dictionary['STAT'] = stat
             dictionary['P'] = p_value
             dictionary['BETA'] = beta
