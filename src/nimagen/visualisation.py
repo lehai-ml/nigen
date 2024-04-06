@@ -1514,6 +1514,7 @@ class Brainmap:
                          legends:bool=True,
                          atlas_file:Union[str,nib.nifti1.Nifti1Image]=None,
                          cmap:str='Spectral',plot_orientation:bool=True,
+                         plot_focus=False,
                          T2=False,
                          **figkwargs):
         """
@@ -1607,22 +1608,39 @@ class Brainmap:
         figkwargs['background_value'] = 0 if 'background_value' not in figkwargs else figkwargs['background_value'] # some images have weird artefacts.
         brain_map.atlas[brain_map.atlas <= figkwargs['background_value']] = np.nan # set the background to 0 transparency
         #the following original atlas are needed for the outline.
-        atlas_slice_dict = {'axial':brain_map.atlas.shape[2]//2,
-                         'coronal':brain_map.atlas.shape[2]//2,
-                         'sagittal':brain_map.atlas.shape[2]//2}
-
-        if isinstance(atlas_slice,int):
-            atlas_slice_dict['axial'] = atlas_slice
-            atlas_slice_dict['coronal'] = atlas_slice
-            atlas_slice_dict['sagittal'] = atlas_slice
-        elif isinstance(atlas_slice, list):
+        x,y,z = brain_map.atlas.shape
+        max_dim = max(x,y,z)
+        if 'padding' not in figkwargs:
+            figkwargs['padding']=True
+        if figkwargs['padding']:
+            padding_x = max_dim - x
+            padding_y = max_dim - y
+            padding_z = max_dim - z
+        else:
+            padding_x,padding_y,padding_z = 0,0,0
+        ##added padding around the 3D array so when plotting the subplots are squared and of equal heights
+        brain_map.atlas = np.pad(brain_map.atlas,
+                                 [(padding_x//2,padding_x//2),
+                                  (padding_y//2,padding_y//2),
+                                  (padding_z//2,padding_z//2)],
+                                 constant_values=np.nan)
+        
+        if isinstance(atlas_slice, tuple) or isinstance(atlas_slice,list):
             if len(atlas_slice)!=3:
-                raise ValueError('atlas slice must be 3, stands for axial, coronal, sagittal')
-            atlas_slices = [slice_int if slice_int is not None else brain_map.atlas.shape[2]//2 for slice_int in atlas_slice]
-            atlas_slice_dict = dict(zip(['axial','coronal','sagittal'],atlas_slices))
-        elif isinstance(atlas_slice,dict):
-            for key,value in atlas_slice.items():
-                atlas_slice_dict[key] = value                
+                raise ValueError("atlas slice must be 3, stands for x, y, z coordinates. \
+                        x- moves the sagittal slice (i.e., L-R axis),\
+                        y-moves the coronal slice (i.e., AP axis) \
+                        z- moves the axial slice (i.e., S-I axis)")
+        else:
+            atlas_slice = (x//2,y//2,z//2)
+        atlas_slice_dict = dict(zip(['sagittal','coronal','axial'],atlas_slice))
+        atlas_slice_dict['axial'] += padding_z//2
+        atlas_slice_dict['coronal'] += padding_y//2
+        atlas_slice_dict['sagittal'] += padding_x//2
+        
+        # elif isinstance(atlas_slice,dict):
+        #     for key,value in atlas_slice.items():
+        #         atlas_slice_dict[key] = value                
         
         #original atlases are used to delineate the outline
         original_axial_atlas = brain_map.atlas[:,:,atlas_slice_dict['axial']].copy()
@@ -1869,8 +1887,6 @@ class Brainmap:
             
         if plot_orientation:
             for view,ax in map_view_dict.items():
-                # map_view_dict[view]['ax'].axhline(map_view_dict[view]['atlas'].shape[1]//2,alpha=0.1)
-                # map_view_dict[view]['ax'].axvline(map_view_dict[view]['atlas'].shape[0]//2,alpha=0.1)
                 if view == 'axial':
                     map_view_dict[view]['ax'].text(0,map_view_dict[view]['atlas'].shape[1]//2 + 2, 'L',fontsize=15,fontweight='bold')
                     map_view_dict[view]['ax'].text(map_view_dict[view]['atlas'].shape[0]//2 + 2, 0, 'A',fontsize=15,fontweight='bold')
@@ -1886,7 +1902,21 @@ class Brainmap:
                     map_view_dict[view]['ax'].text(map_view_dict[view]['atlas'].shape[0]//2 + 2, 0, 'S',fontsize=15,fontweight='bold')
                     map_view_dict[view]['ax'].text(map_view_dict[view]['atlas'].shape[0]-10,map_view_dict[view]['atlas'].shape[1]//2+2,'A',fontsize=15,fontweight='bold')
                     map_view_dict[view]['ax'].text(map_view_dict[view]['atlas'].shape[0]//2,map_view_dict[view]['atlas'].shape[1]-10,'I',fontsize=15,fontweight='bold')
-        
+    
+        if plot_focus:
+            #atlas_slice=(x,y,z)
+            plot_focus_kwargs={'ls':':','c':'y','alpha':1}
+            for view,ax in map_view_dict.items():
+                if view == 'axial':
+                    map_view_dict[view]['ax'].axhline(y-atlas_slice[1]+padding_y//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(atlas_slice[0]+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+                elif view == 'coronal':
+                    map_view_dict[view]['ax'].axhline(atlas_slice[2]-padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(atlas_slice[0]+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+                elif view == 'sagittal':
+                    map_view_dict[view]['ax'].axhline(atlas_slice[2]-padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(atlas_slice[1]+padding_y//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+            
         return fig, map_view_dict
         
     
@@ -2029,11 +2059,11 @@ class Geneset:
         sm = plt.cm.ScalarMappable(cmap='Reds',norm = norm)
         sm.set_array([])
         
-        g = sns.barplot(x=-np.log10(gene_set_table[x]), y=y, hue=colour_by, data=gene_set_table,palette='Reds', 
+        g = sns.barplot(x=-np.log10(gene_set_table[x]), y=y, color=colour_by, data=gene_set_table,palette='Reds', 
                         dodge=False,ax=ax)
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
-        ax.legend_.remove()
+        # ax.legend_.remove()
         cbar = ax.figure.colorbar(sm,ax = ax)
         cbar.set_label(colour_by,fontsize=15)
         ax.set_yticks([])        
