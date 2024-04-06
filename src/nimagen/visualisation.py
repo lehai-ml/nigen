@@ -1515,6 +1515,7 @@ class Brainmap:
                          atlas_file:Union[str,nib.nifti1.Nifti1Image]=None,
                          cmap:str='Spectral',plot_orientation:bool=True,
                          plot_focus=False,
+                         remove_background=True,
                          T2=False,
                          **figkwargs):
         """
@@ -1606,8 +1607,6 @@ class Brainmap:
             figkwargs['cmap_reversed'] = False
         brain_map = cls(atlas_file,cmap,figkwargs['cmap_reversed'])
         figkwargs['background_value'] = 0 if 'background_value' not in figkwargs else figkwargs['background_value'] # some images have weird artefacts.
-        brain_map.atlas[brain_map.atlas <= figkwargs['background_value']] = np.nan # set the background to 0 transparency
-        #the following original atlas are needed for the outline.
         x,y,z = brain_map.atlas.shape
         max_dim = max(x,y,z)
         if 'padding' not in figkwargs:
@@ -1623,8 +1622,10 @@ class Brainmap:
                                  [(padding_x//2,padding_x//2),
                                   (padding_y//2,padding_y//2),
                                   (padding_z//2,padding_z//2)],
-                                 constant_values=np.nan)
-        
+                                 constant_values=figkwargs['background_value'])
+        if remove_background:
+            brain_map.atlas[brain_map.atlas <= figkwargs['background_value']] = np.nan # set the background to 0 transparency
+        #the following original atlas are needed for the outline.        
         if isinstance(atlas_slice, tuple) or isinstance(atlas_slice,list):
             if len(atlas_slice)!=3:
                 raise ValueError("atlas slice must be 3, stands for x, y, z coordinates. \
