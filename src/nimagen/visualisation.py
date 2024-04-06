@@ -1881,10 +1881,10 @@ class Brainmap:
                             fontsize = figkwargs['label_legend_fontsize'],
                             frameon=False)
 
-        for view in map_view:
-            map_view_dict[view]['ax'].spines[['left','right','top','bottom']].set_visible(False)
-            map_view_dict[view]['ax'].set_xticks([])
-            map_view_dict[view]['ax'].set_yticks([])
+        # for view in map_view:
+        #     map_view_dict[view]['ax'].spines[['left','right','top','bottom']].set_visible(False)
+        #     map_view_dict[view]['ax'].set_xticks([])
+        #     map_view_dict[view]['ax'].set_yticks([])
             
         if plot_orientation:
             for view,ax in map_view_dict.items():
@@ -1906,17 +1906,18 @@ class Brainmap:
     
         if plot_focus:
             #atlas_slice=(x,y,z)
+            s_x,s_y,s_z = atlas_slice
             plot_focus_kwargs={'ls':':','c':'y','alpha':1}
             for view,ax in map_view_dict.items():
                 if view == 'axial':
-                    map_view_dict[view]['ax'].axhline(y-atlas_slice[1]+padding_y//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
-                    map_view_dict[view]['ax'].axvline(atlas_slice[0]+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axhline(y-s_y+padding_y//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(s_x+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
                 elif view == 'coronal':
-                    map_view_dict[view]['ax'].axhline(atlas_slice[2]-padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
-                    map_view_dict[view]['ax'].axvline(atlas_slice[0]+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axhline(z-s_z+padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(s_x+padding_x//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
                 elif view == 'sagittal':
-                    map_view_dict[view]['ax'].axhline(atlas_slice[2]-padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
-                    map_view_dict[view]['ax'].axvline(atlas_slice[1]+padding_y//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axhline(z-s_z+padding_z//2,xmin=.1,xmax=.9,**plot_focus_kwargs)
+                    map_view_dict[view]['ax'].axvline(s_y+padding_y//2,ymin=.1,ymax=.9,**plot_focus_kwargs)
             
         return fig, map_view_dict
         
